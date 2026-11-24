@@ -1,0 +1,455 @@
+{
+  "name": "shore_pine",
+  "tree": {
+    "maxHeight": 21,
+    "roll": {
+      "base": 0,
+      "treeVariance": 180
+    }
+  },
+  "forces": [
+    {
+      "name": "sea_wind",
+      "type": "wind",
+      "vector": [
+        1,
+        0,
+        0.15
+      ],
+      "strength": 0.05,
+      "directionVariance": 25,
+      "gust": 0.6,
+      "gustSize": 5,
+      "heightPower": 0.8,
+      "flexibility": 0.8
+    }
+  ],
+  "shapes": {
+    "leafBlockDensity": 0.82,
+    "voxelRandomness": 0.25,
+    "fullRadius": 0.3,
+    "trunkFullRadius": 0.3,
+    "wallRadius": 0.22,
+    "wallGapChance": 0,
+    "thinCoverage": 1,
+    "gateChance": 0.28,
+    "gateInWallChance": 0.25,
+    "openGateChance": 0.85,
+    "tipCanopyDensity": 0,
+    "fineBranchChance": 0.7,
+    "fineGateChance": 0.5,
+    "impliedRadius": 0,
+    "impliedLeafSize": 0,
+    "impliedLeafStrength": 0,
+    "deadBushChance": 0,
+    "saplingLeafDensity": 0.5,
+    "smoothTrunk": true,
+    "smoothStairDepth": 0.2,
+    "smoothSlabDepth": 0.36,
+    "smoothWallDepth": 0.18,
+    "smoothFenceDepth": 0.32,
+    "buttonChance": 0.08,
+    "buttonSpacing": 2
+  },
+  "blocks": {
+    "log": {
+      "rule": "height",
+      "bands": [
+        {
+          "below": 0.55,
+          "block": "dark_oak_log"
+        },
+        {
+          "block": "spruce_log"
+        }
+      ]
+    },
+    "planks": "dark_oak_planks",
+    "wall": "off",
+    "fence": {
+      "rule": "level",
+      "levels": {
+        "limb": "dark_oak_fence"
+      },
+      "other": "spruce_fence"
+    },
+    "gate": "dark_oak_fence_gate",
+    "button": "dark_oak_button",
+    "sapling": "spruce_sapling",
+    "leaves": "spruce_leaves"
+  },
+  "plantLayers": [
+    {
+      "name": "fern tops",
+      "blocks": "large_fern",
+      "doubleHalf": "top",
+      "chance": 0.42,
+      "leafDensity": [
+        0.16,
+        1
+      ],
+      "nearBranch": "any"
+    },
+    {
+      "name": "fern bottoms",
+      "blocks": "large_fern",
+      "doubleHalf": "bottom",
+      "chance": 0.42,
+      "leafDensity": [
+        0.16,
+        1
+      ],
+      "nearBranch": "any"
+    },
+    {
+      "name": "small ferns on top",
+      "blocks": "fern",
+      "chance": 0.55,
+      "side": "onTallPlant",
+      "nearBranch": "branch",
+      "nearDistance": 6
+    }
+  ],
+  "levels": [
+    {
+      "name": "trunk",
+      "segmentLength": 0.7,
+      "length": {
+        "absolute": {
+          "base": 20,
+          "treeVariance": 1
+        }
+      },
+      "forces": {
+        "sea_wind": {
+          "base": 0.3,
+          "treeVariance": 0.12
+        }
+      },
+      "shape": {
+        "zigzag": {
+          "base": 18,
+          "treeVariance": 4
+        },
+        "zigzagLength": {
+          "base": 3.6,
+          "treeVariance": 0.6
+        }
+      },
+      "noise": {
+        "earlyAmount": {
+          "base": 0.12,
+          "treeVariance": 0.03
+        },
+        "earlyTurbulence": 0.45,
+        "lateAmount": 1,
+        "lateTurbulence": 0.3,
+        "lateSmooth": 0.3
+      },
+      "radius": {
+        "absolute": {
+          "base": 0.72,
+          "treeVariance": 0.07
+        },
+        "taper": [
+          [
+            0,
+            1
+          ],
+          [
+            0.15,
+            0.82
+          ],
+          [
+            0.6,
+            0.55
+          ],
+          [
+            0.88,
+            0.3
+          ],
+          [
+            1,
+            0.12
+          ]
+        ]
+      },
+      "flares": {
+        "radius": 0.3,
+        "height": 1.5,
+        "pinch": 1.6,
+        "lobes": 4,
+        "noise": 0.3,
+        "angle": {
+          "base": 0,
+          "treeVariance": 180
+        }
+      }
+    },
+    {
+      "name": "limb",
+      "segmentLength": 0.6,
+      "generation": {
+        "mode": "interval",
+        "first": 0.42,
+        "last": 0.97,
+        "frequency": {
+          "base": 3.9,
+          "treeVariance": 0.25
+        },
+        "count": 3,
+        "spread": 0.06,
+        "spiral": 47,
+        "balance": 0.5,
+        "knockout": 0.12,
+        "rotation": {
+          "base": 0,
+          "branchVariance": 26
+        }
+      },
+      "length": {
+        "percentOfParent": {
+          "base": 0.5,
+          "treeVariance": 0.03,
+          "branchVariance": 0.1,
+          "profile": [
+            [
+              0,
+              1
+            ],
+            [
+              0.5,
+              1
+            ],
+            [
+              0.8,
+              0.72
+            ],
+            [
+              1,
+              0.36
+            ]
+          ]
+        },
+        "min": 3,
+        "max": 11
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.46,
+          "branchVariance": 0.04,
+          "profile": [
+            [
+              0,
+              1.05
+            ],
+            [
+              0.6,
+              1
+            ],
+            [
+              1,
+              0.72
+            ]
+          ]
+        }
+      },
+      "shape": {
+        "gravity": {
+          "base": 0.004,
+          "branchVariance": 0.012
+        },
+        "twist": {
+          "base": 0,
+          "branchVariance": 20
+        },
+        "curlUp": {
+          "base": 2.8,
+          "branchVariance": 0.9
+        },
+        "curlRight": {
+          "base": 0,
+          "branchVariance": 8
+        },
+        "zigzag": {
+          "base": 39,
+          "branchVariance": 8
+        },
+        "zigzagLength": {
+          "base": 1.5,
+          "branchVariance": 0.4
+        }
+      },
+      "noise": {
+        "earlyAmount": 0.14,
+        "earlyTurbulence": 0.7,
+        "lateAmount": 0.5,
+        "lateTurbulence": 0.8,
+        "lateSmooth": 0.05
+      },
+      "jink": {
+        "amount": 0.2,
+        "segments": {
+          "base": 5,
+          "branchVariance": 1.5
+        },
+        "uniformity": 0.1
+      },
+      "prune": {
+        "ground": 1
+      },
+      "forces": {
+        "sea_wind": {
+          "base": 1,
+          "profile": [
+            [
+              0,
+              0.5
+            ],
+            [
+              1,
+              1.2
+            ]
+          ]
+        }
+      },
+      "radius": {
+        "percentOfParent": {
+          "base": 0.66,
+          "branchVariance": 0.06
+        },
+        "taper": [
+          [
+            0,
+            1
+          ],
+          [
+            0.55,
+            0.62
+          ],
+          [
+            1,
+            0.3
+          ]
+        ],
+        "min": 0.08
+      }
+    },
+    {
+      "name": "branch",
+      "generation": {
+        "mode": "phyllotaxy",
+        "phyllotaxy": "alternate_distichous",
+        "first": 0.5,
+        "last": 0.92,
+        "internodeLength": {
+          "base": 3.2,
+          "branchVariance": 0.3
+        },
+        "spread": 0.15,
+        "knockout": 0.1
+      },
+      "length": {
+        "percentOfParent": {
+          "base": 0.42,
+          "branchVariance": 0.08
+        },
+        "min": 1.6,
+        "max": 3.2
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.34,
+          "branchVariance": 0.05
+        },
+        "alignment": 0.1
+      },
+      "shape": {
+        "gravity": 0.03,
+        "curlUp": 0.4,
+        "zigzag": {
+          "base": 16,
+          "branchVariance": 8
+        },
+        "zigzagLength": 1.1
+      },
+      "noise": {
+        "lateAmount": 0.18,
+        "lateTurbulence": 0.7
+      },
+      "prune": {
+        "ground": 1
+      },
+      "forces": {
+        "sea_wind": 0.7
+      },
+      "radius": {
+        "percentOfParent": 0.6,
+        "min": 0.05,
+        "max": 0.1
+      }
+    }
+  ],
+  "leaves": [
+    {
+      "parent": "branch",
+      "generation": {
+        "mode": "absolute",
+        "count": 1,
+        "first": 0.9,
+        "last": 1
+      },
+      "size": {
+        "base": 1.95,
+        "branchVariance": 0.25
+      },
+      "scale": {
+        "x": 1.05,
+        "y": 0.42,
+        "z": 1.05
+      },
+      "elongation": 1,
+      "skyInfluence": 1,
+      "fold": 0.2,
+      "reach": 0.15,
+      "strength": {
+        "base": 0.96,
+        "branchVariance": 0.03
+      },
+      "falloff": 0.72,
+      "noiseScale": 2.4,
+      "noiseStrength": 0.22,
+      "envelopeEdge": 0
+    },
+    {
+      "parent": "limb",
+      "generation": {
+        "mode": "absolute",
+        "count": 1,
+        "first": 0.96,
+        "last": 1
+      },
+      "size": {
+        "base": 2.25,
+        "branchVariance": 0.3
+      },
+      "scale": {
+        "x": 1.05,
+        "y": 0.42,
+        "z": 1.05
+      },
+      "elongation": 1,
+      "skyInfluence": 1,
+      "fold": 0.2,
+      "reach": 0.15,
+      "strength": {
+        "base": 0.97,
+        "branchVariance": 0.02
+      },
+      "falloff": 0.72,
+      "noiseScale": 2.4,
+      "noiseStrength": 0.22,
+      "envelopeEdge": 0
+    }
+  ]
+}

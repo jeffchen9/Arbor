@@ -1,0 +1,565 @@
+{
+  "name": "western_hemlock",
+  "tree": {
+    "maxHeight": 72,
+    "sizeVariance": 0.165,
+    "roll": {
+      "base": 0,
+      "treeVariance": 180
+    }
+  },
+  "shapeControl": {
+    "style": "envelope",
+    "crownBase": 17,
+    "radius": [
+      [
+        0,
+        13
+      ],
+      [
+        0.2,
+        15
+      ],
+      [
+        0.5,
+        12
+      ],
+      [
+        0.8,
+        6
+      ],
+      [
+        0.95,
+        2.4
+      ],
+      [
+        1,
+        0.9
+      ]
+    ],
+    "action": "stop",
+    "steer": 0
+  },
+  "shapes": {
+    "leafBlockDensity": 0.97,
+    "voxelRandomness": 0.4,
+    "fullRadius": 0.35,
+    "trunkFullRadius": 0.5,
+    "wallRadius": 0.18,
+    "wallGapChance": 0.03,
+    "thinCoverage": 0.95,
+    "gateChance": 0.3,
+    "gateInWallChance": 0.2,
+    "openGateChance": 0.7,
+    "tipCanopyDensity": 0.12,
+    "fineBranchChance": 0.7,
+    "fineGateChance": 0.3,
+    "impliedRadius": 0.042,
+    "impliedLeafSize": 1,
+    "impliedLeafStrength": 0.6,
+    "deadBushChance": 0.12,
+    "deadBushDensity": 4,
+    "deadBushOffFenceChance": 0.08,
+    "smoothTrunk": true,
+    "smoothStairDepth": 0.2,
+    "smoothSlabDepth": 0.36,
+    "smoothWallDepth": 0.18,
+    "smoothFenceDepth": 0.32,
+    "buttonChance": 0.02,
+    "buttonSpacing": 4
+  },
+  "blocks": {
+    "log": {
+      "rule": "height",
+      "bands": [
+        {
+          "below": 0.5,
+          "block": "dark_oak_log"
+        },
+        {
+          "block": "spruce_log"
+        }
+      ]
+    },
+    "planks": "dark_oak_planks",
+    "wall": "cobbled_deepslate_wall",
+    "fence": {
+      "rule": "noise",
+      "clump": 3,
+      "blocks": {
+        "dark_oak_fence": 3,
+        "spruce_fence": 1
+      }
+    },
+    "gate": "dark_oak_fence_gate",
+    "button": "dark_oak_button",
+    "sapling": "spruce_sapling",
+    "leaves": "spruce_leaves"
+  },
+  "plantLayers": [
+    {
+      "name": "large fern tops",
+      "blocks": "large_fern",
+      "doubleHalf": "top",
+      "chance": 0.2,
+      "leafDensity": [
+        0.06,
+        1
+      ],
+      "nearBranch": "any"
+    },
+    {
+      "name": "large fern bottoms",
+      "blocks": "large_fern",
+      "doubleHalf": "bottom",
+      "chance": 0.2,
+      "leafDensity": [
+        0.06,
+        1
+      ],
+      "nearBranch": "any"
+    },
+    {
+      "name": "ferns",
+      "blocks": "fern",
+      "chance": 0.62,
+      "leafDensity": [
+        0.07,
+        1
+      ],
+      "nearBranch": "any"
+    }
+  ],
+  "levels": [
+    {
+      "name": "trunk",
+      "segmentLength": 0.6,
+      "length": {
+        "absolute": 60
+      },
+      "shape": {
+        "gravity": {
+          "base": 0.7,
+          "profile": [
+            [
+              0,
+              0
+            ],
+            [
+              0.92,
+              0
+            ],
+            [
+              0.97,
+              0.5
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      },
+      "noise": {
+        "earlyAmount": 0.004,
+        "earlyTurbulence": 0.2,
+        "lateAmount": 0.18,
+        "lateTurbulence": 0.25,
+        "lateSmooth": 0.45
+      },
+      "radius": {
+        "absolute": 1.15,
+        "taper": [
+          [
+            0,
+            1
+          ],
+          [
+            0.3,
+            0.82
+          ],
+          [
+            0.6,
+            0.52
+          ],
+          [
+            0.85,
+            0.2
+          ],
+          [
+            1,
+            0.04
+          ]
+        ]
+      },
+      "flares": {
+        "radius": 0.28,
+        "height": 2.6,
+        "pinch": 1.5,
+        "lobes": 5,
+        "noise": 0.25,
+        "angle": {
+          "base": 0,
+          "treeVariance": 180
+        }
+      }
+    },
+    {
+      "name": "bough",
+      "segmentLength": 0.55,
+      "generation": {
+        "mode": "phyllotaxy",
+        "phyllotaxy": "whorled",
+        "childrenPerNode": 3,
+        "first": 0.3,
+        "last": 0.985,
+        "internodeLength": {
+          "base": 2.75,
+          "treeVariance": 0.25
+        },
+        "spread": 0.62,
+        "spiral": 41,
+        "knockout": 0.16,
+        "rotation": {
+          "base": 0,
+          "branchVariance": 24
+        }
+      },
+      "length": {
+        "percentOfParent": {
+          "base": 0.31,
+          "treeVariance": 0.012,
+          "branchVariance": 0.05,
+          "profile": [
+            [
+              0,
+              0.72
+            ],
+            [
+              0.18,
+              1
+            ],
+            [
+              0.55,
+              0.62
+            ],
+            [
+              0.85,
+              0.28
+            ],
+            [
+              1,
+              0.08
+            ]
+          ]
+        },
+        "min": 1.2
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.53,
+          "branchVariance": 0.04,
+          "profile": [
+            [
+              0,
+              1.12
+            ],
+            [
+              0.5,
+              1
+            ],
+            [
+              0.85,
+              0.82
+            ],
+            [
+              1,
+              0.58
+            ]
+          ]
+        }
+      },
+      "shape": {
+        "gravity": {
+          "base": 0.055,
+          "branchVariance": 0.014,
+          "profile": [
+            [
+              0,
+              0.25
+            ],
+            [
+              0.65,
+              1
+            ],
+            [
+              1,
+              1.5
+            ]
+          ]
+        }
+      },
+      "noise": {
+        "earlyAmount": 0.03,
+        "earlyTurbulence": 0.45,
+        "lateAmount": 0.22,
+        "lateTurbulence": 0.5
+      },
+      "prune": {
+        "ground": 1
+      },
+      "radius": {
+        "percentOfParent": {
+          "base": 0.22,
+          "branchVariance": 0.03
+        },
+        "taper": [
+          [
+            0,
+            1
+          ],
+          [
+            0.5,
+            0.5
+          ],
+          [
+            1,
+            0.12
+          ]
+        ],
+        "min": 0.06,
+        "max": 0.45
+      }
+    },
+    {
+      "name": "branch",
+      "generation": {
+        "mode": "phyllotaxy",
+        "phyllotaxy": "alternate_distichous",
+        "first": 0.14,
+        "last": 1,
+        "internodeLength": {
+          "base": 1.05,
+          "branchVariance": 0.18
+        },
+        "spread": 0.2,
+        "knockout": 0.1
+      },
+      "length": {
+        "percentOfParent": {
+          "base": 0.36,
+          "branchVariance": 0.06,
+          "profile": [
+            [
+              0,
+              1
+            ],
+            [
+              0.35,
+              0.9
+            ],
+            [
+              1,
+              0.2
+            ]
+          ]
+        },
+        "min": 1,
+        "max": 4.2
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.3,
+          "branchVariance": 0.04
+        },
+        "startRoll": 90,
+        "alignment": 1
+      },
+      "shape": {
+        "gravity": {
+          "base": 0.07,
+          "branchVariance": 0.02
+        }
+      },
+      "noise": {
+        "lateAmount": 0.12,
+        "lateTurbulence": 0.5
+      },
+      "prune": {
+        "ground": 1
+      },
+      "radius": {
+        "percentOfParent": 0.5,
+        "min": 0.04,
+        "max": 0.18
+      }
+    },
+    {
+      "name": "spray",
+      "generation": {
+        "mode": "phyllotaxy",
+        "phyllotaxy": "alternate_distichous",
+        "first": 0.28,
+        "last": 1,
+        "internodeLength": {
+          "base": 0.95,
+          "branchVariance": 0.15
+        },
+        "spread": 0.15,
+        "knockout": 0.3
+      },
+      "length": {
+        "percentOfParent": {
+          "base": 0.48,
+          "branchVariance": 0.1
+        },
+        "min": 0.7,
+        "max": 1.9
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.42,
+          "branchVariance": 0.05
+        },
+        "startRoll": 90,
+        "alignment": 1
+      },
+      "shape": {
+        "gravity": 0.34
+      },
+      "prune": {
+        "ground": 1
+      },
+      "radius": {
+        "percentOfParent": 0.6,
+        "min": 0.03,
+        "max": 0.07
+      }
+    }
+  ],
+  "leaves": [
+    {
+      "parent": "trunk",
+      "generation": {
+        "mode": "proportional",
+        "density": 1,
+        "first": 0.82,
+        "last": 1
+      },
+      "size": {
+        "base": 1.25,
+        "branchVariance": 0.18
+      },
+      "elongation": 1.25,
+      "fold": -0.5,
+      "reach": 0.3,
+      "strength": {
+        "base": 0.76,
+        "branchVariance": 0.08
+      },
+      "falloff": 1.2,
+      "noiseScale": 2.2,
+      "noiseStrength": 0.34,
+      "envelopeEdge": 0.4
+    },
+    {
+      "parent": "bough",
+      "generation": {
+        "mode": "proportional",
+        "density": 0.9,
+        "first": 0.14,
+        "knockout": 0.06
+      },
+      "size": {
+        "base": 1.75,
+        "branchVariance": 0.25
+      },
+      "scale": {
+        "x": 1.2,
+        "y": 0.62,
+        "z": 1.2
+      },
+      "elongation": 1,
+      "skyInfluence": 0.85,
+      "fold": -0.15,
+      "reach": 0.2,
+      "strength": {
+        "base": 0.84,
+        "branchVariance": 0.07
+      },
+      "falloff": 1,
+      "noiseScale": 2.2,
+      "noiseStrength": 0.36,
+      "envelopeEdge": 0.8
+    },
+    {
+      "parent": "branch",
+      "generation": {
+        "mode": "proportional",
+        "density": 1,
+        "first": 0.12,
+        "knockout": 0.05
+      },
+      "size": {
+        "base": 1.6,
+        "branchVariance": 0.22
+      },
+      "scale": {
+        "x": 1.2,
+        "y": 0.65,
+        "z": 1.2
+      },
+      "elongation": 1,
+      "skyInfluence": 0.85,
+      "fold": -0.2,
+      "reach": 0.2,
+      "strength": {
+        "base": 0.88,
+        "branchVariance": 0.06
+      },
+      "falloff": 1,
+      "noiseScale": 2,
+      "noiseStrength": 0.4,
+      "envelopeEdge": 0.8
+    },
+    {
+      "parent": "spray",
+      "generation": {
+        "mode": "absolute",
+        "count": 1,
+        "first": 0.55,
+        "last": 0.95,
+        "knockout": 0.2
+      },
+      "size": {
+        "base": 1.15,
+        "branchVariance": 0.16
+      },
+      "scale": {
+        "x": 0.8,
+        "y": 0.95,
+        "z": 0.8
+      },
+      "elongation": 1.4,
+      "fold": -0.8,
+      "align": 0.3,
+      "reach": 0.3,
+      "strength": {
+        "base": 0.8,
+        "branchVariance": 0.08
+      },
+      "falloff": 1.15,
+      "noiseScale": 1.8,
+      "noiseStrength": 0.46,
+      "envelopeEdge": 0.8
+    }
+  ],
+  "decorators": {
+    "pinecones": {
+      "enabled": true,
+      "minLevel": 2,
+      "undersideShare": 0.8,
+      "chance": 0.35
+    }
+  }
+}

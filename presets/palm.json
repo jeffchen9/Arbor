@@ -1,0 +1,292 @@
+{
+  "name": "palm",
+  "tree": {
+    "maxHeight": 40,
+    "roll": {
+      "base": 0,
+      "treeVariance": 180
+    }
+  },
+  "forces": [
+    {
+      "name": "lean",
+      "type": "direction",
+      "vector": [
+        1,
+        0,
+        0.3
+      ],
+      "strength": 0.012,
+      "falloff": 0
+    }
+  ],
+  "shapes": {
+    "voxelRandomness": 0.25,
+    "fullRadius": 0.4,
+    "trunkFullRadius": 0.4,
+    "wallRadius": 0.18,
+    "wallGapChance": 0,
+    "thinCoverage": 1,
+    "gateChance": 0,
+    "openGateChance": 0,
+    "fineBranchChance": 0,
+    "impliedRadius": 0,
+    "deadBushChance": 0,
+    "smoothTrunk": true,
+    "smoothStairDepth": 0.14,
+    "smoothSlabDepth": 0.28,
+    "smoothWallDepth": 0.12,
+    "smoothFenceDepth": 0.22,
+    "buttonChance": 0.1,
+    "buttonSpacing": 2
+  },
+  "blocks": {
+    "log": {
+      "rule": "noise",
+      "clump": 2,
+      "blocks": {
+        "jungle_log": 5,
+        "stripped_jungle_log": 2,
+        "composter": 3
+      }
+    },
+    "planks": "jungle_planks",
+    "wall": "mud_brick_wall",
+    "fence": "jungle_fence",
+    "gate": "off",
+    "button": "jungle_button",
+    "sapling": "off",
+    "deadBush": "off",
+    "leaves": "off"
+  },
+  "plantLayers": [
+    {
+      "name": "inflorescence",
+      "blocks": {
+        "wheat[age=7]": 5,
+        "wheat[age=5]": 2
+      },
+      "chance": 0.9,
+      "nearBranch": "inflorescence",
+      "nearDistance": 0
+    },
+    {
+      "name": "frond spine",
+      "blocks": "fern",
+      "chance": 0.95,
+      "nearBranch": "frond",
+      "nearDistance": 0
+    },
+    {
+      "name": "leaflet tips",
+      "blocks": "large_fern",
+      "doubleHalf": "top",
+      "chance": 0.62,
+      "nearBranch": "leaflet",
+      "nearDistance": 0
+    },
+    {
+      "name": "leaflet bases",
+      "blocks": "large_fern",
+      "doubleHalf": "bottom",
+      "chance": 0.3,
+      "nearBranch": "leaflet",
+      "nearDistance": 0
+    },
+    {
+      "name": "leaflet fill",
+      "blocks": "fern",
+      "chance": 0.35,
+      "nearBranch": "leaflet",
+      "nearDistance": 0
+    }
+  ],
+  "levels": [
+    {
+      "name": "trunk",
+      "length": {
+        "absolute": {
+          "base": 24,
+          "treeVariance": 5
+        }
+      },
+      "forces": {
+        "lean": {
+          "base": 1,
+          "treeVariance": 0.8
+        }
+      },
+      "noise": {
+        "earlyAmount": 0.012,
+        "earlyTurbulence": 0.2,
+        "lateAmount": 0.2,
+        "lateTurbulence": 0.2,
+        "lateSmooth": 0.5
+      },
+      "radius": {
+        "absolute": {
+          "base": 0.6,
+          "treeVariance": 0.08
+        },
+        "taper": [
+          [
+            0,
+            1
+          ],
+          [
+            0.1,
+            0.78
+          ],
+          [
+            0.8,
+            0.62
+          ],
+          [
+            1,
+            0.48
+          ]
+        ]
+      },
+      "flares": {
+        "radius": 0.45,
+        "height": 2,
+        "pinch": 1.6,
+        "lobes": 4,
+        "noise": 0.2
+      }
+    },
+    {
+      "name": "frond",
+      "wood": false,
+      "generation": {
+        "mode": "absolute",
+        "first": 0.95,
+        "last": 1,
+        "count": {
+          "base": 13,
+          "treeVariance": 2
+        },
+        "spiral": 137.5,
+        "rotation": {
+          "base": 0,
+          "branchVariance": 12
+        }
+      },
+      "length": {
+        "absolute": {
+          "base": 11,
+          "treeVariance": 1.5,
+          "branchVariance": 2
+        }
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.3,
+          "branchVariance": 0.11
+        }
+      },
+      "shape": {
+        "gravity": {
+          "base": 0.085,
+          "branchVariance": 0.02
+        }
+      },
+      "forces": {
+        "lean": 0
+      },
+      "noise": {
+        "lateAmount": 0.12
+      },
+      "radius": {
+        "absolute": 0.1,
+        "clampToParent": false
+      }
+    },
+    {
+      "name": "leaflet",
+      "parent": "frond",
+      "wood": false,
+      "generation": {
+        "mode": "phyllotaxy",
+        "phyllotaxy": "opposite_distichous",
+        "first": 0.14,
+        "last": 1,
+        "internodeLength": 1.35,
+        "knockout": 0.1
+      },
+      "length": {
+        "absolute": {
+          "base": 2.6,
+          "branchVariance": 0.4,
+          "profile": [
+            [
+              0,
+              0.8
+            ],
+            [
+              0.35,
+              1
+            ],
+            [
+              1,
+              0.3
+            ]
+          ]
+        },
+        "min": 1
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.36,
+          "branchVariance": 0.03
+        }
+      },
+      "shape": {
+        "gravity": 0.09
+      },
+      "forces": {
+        "lean": 0
+      },
+      "radius": {
+        "absolute": 0.05,
+        "clampToParent": false
+      }
+    },
+    {
+      "name": "inflorescence",
+      "parent": "trunk",
+      "wood": false,
+      "generation": {
+        "mode": "interval",
+        "first": 0.86,
+        "last": 0.95,
+        "frequency": 1.1,
+        "count": 2,
+        "spiral": 137.5,
+        "spread": 0.3
+      },
+      "length": {
+        "absolute": {
+          "base": 3.6,
+          "branchVariance": 0.8
+        }
+      },
+      "orientation": {
+        "startAngle": {
+          "base": 0.58,
+          "branchVariance": 0.06
+        }
+      },
+      "shape": {
+        "gravity": 0.12
+      },
+      "forces": {
+        "lean": 0
+      },
+      "radius": {
+        "absolute": 0.05,
+        "clampToParent": false
+      }
+    }
+  ]
+}
