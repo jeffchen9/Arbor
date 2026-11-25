@@ -27,7 +27,9 @@ uniform mat4 uViewProjection;
 
 out vec3 vWorld;
 out vec3 vNormal;
-out vec2 vUv;
+// Centroid keeps texture lookups inside the quad at its antialiased edges; otherwise they reach the next texture in
+// the atlas and draw a thin border.
+centroid out vec2 vUv;
 out vec3 vTint;
 
 void main() {

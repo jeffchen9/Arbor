@@ -27,6 +27,10 @@ out vec4 fragColor;
 // @lighting
 
 void main() {
+    // Seen from below, the ground is see-through so the tree stays visible.
+    if (!gl_FrontFacing) {
+        discard;
+    }
     // Sunlit ground is pure white, so the shadow is the only thing visible on it.
     vec3 shadow = vec3(0.56, 0.59, 0.65);
     fragColor = vec4(mix(shadow, vec3(1.0), sunVisibility(vWorld, uNormal)), 1.0);

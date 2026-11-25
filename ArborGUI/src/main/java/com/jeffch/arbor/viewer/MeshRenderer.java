@@ -112,6 +112,7 @@ public final class MeshRenderer implements AutoCloseable {
       if (mesh.vertexCount > 0 && state.isVisible(shapeClass)) {
         float[] color = COLORS.get(shapeClass);
         program.setVec3("uColor", color[0], color[1], color[2]);
+        program.setInt("uTranslucent", ViewerState.FOLIAGE.contains(shapeClass) ? 1 : 0);
         glBindVertexArray(mesh.vao);
         glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount);
       }

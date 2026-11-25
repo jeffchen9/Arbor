@@ -29,16 +29,34 @@ public record Vec3(double x, double y, double z) {
   public static final Vec3 ZERO = new Vec3(0, 0, 0);
   public static final Vec3 UP = new Vec3(0, 1, 0);
 
+  /**
+   * Add vectors.
+   *
+   * @param other the other vector.
+   * @return the sum vector.
+   */
   public Vec3 add(Vec3 other) {
     return new Vec3(x + other.x, y + other.y, z + other.z);
   }
 
+  /**
+   * Subtract vectors.
+   *
+   * @param other the other vector.
+   * @return the difference vector.
+   */
   public Vec3 sub(Vec3 other) {
     return new Vec3(x - other.x, y - other.y, z - other.z);
   }
 
-  public Vec3 scale(double factor) {
-    return new Vec3(x * factor, y * factor, z * factor);
+  /**
+   * Multiply vector by a scalar.
+   *
+   * @param a the scalar.
+   * @return the scaled vector.
+   */
+  public Vec3 scale(double a) {
+    return new Vec3(x * a, y * a, z * a);
   }
 
   public double dot(Vec3 other) {
@@ -46,9 +64,10 @@ public record Vec3(double x, double y, double z) {
   }
 
   /**
-   * The cross product: perpendicular to both vectors, with length equal to the area they span.
+   * Get the cross product.
    *
-   * @param other The second vector.
+   * @param other the other vector.
+   * @return the cross product.
    */
   public Vec3 cross(Vec3 other) {
     return new Vec3(
@@ -57,12 +76,19 @@ public record Vec3(double x, double y, double z) {
             x * other.y - y * other.x);
   }
 
+  /**
+   * Get the norm of the vector.
+   *
+   * @return the norm.
+   */
   public double length() {
     return StrictMath.sqrt(dot(this));
   }
 
   /**
-   * Returns a unit vector, or zero when this vector has no usable length.
+   * Get the unit vector, or zero when this vector has no usable length.
+   *
+   * @return the unit vector.
    */
   public Vec3 normalized() {
     double length = length();

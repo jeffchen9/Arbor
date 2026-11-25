@@ -286,17 +286,17 @@ public final class PresetLoader {
    * @param json The preset's top level.
    */
   private static SimpleSettings simple(Reader json) {
-    double sizeVariety = json.number("sizeVariety", Double.NaN, 0, 0.5);
+    double sizeVariety = json.number("sizeVariety", Double.NaN, 0, 1);
     SimpleSettings settings = new SimpleSettings(
-            json.number("height", 1, 0.5, 2),
-            json.number("crownWidth", 1, 0.5, 2),
-            json.number("trunkThickness", 1, 0.5, 2),
-            json.number("branchDensity", 1, 0.5, 2),
-            json.number("branchAngle", 0, -30, 30),
-            json.number("droop", 0, -1, 1),
-            json.number("twist", 1, 0, 3),
-            json.number("leafFullness", 1, 0.5, 1.5),
-            json.number("windLean", 0, 0, 1),
+            json.number("height", 1, 0.25, 3),
+            json.number("crownWidth", 1, 0.25, 3),
+            json.number("trunkThickness", 1, 0.25, 3),
+            json.number("branchDensity", 1, 0.25, 3),
+            json.number("branchAngle", 0, -60, 60),
+            json.number("droop", 0, -2, 2),
+            json.number("twist", 1, 0, 5),
+            json.number("leafFullness", 1, 0.25, 2),
+            json.number("windLean", 0, 0, 2),
             Double.isNaN(sizeVariety) ? null : Double.valueOf(sizeVariety));
     json.finish();
     return settings;

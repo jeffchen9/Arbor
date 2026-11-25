@@ -28,16 +28,23 @@ import java.util.Map;
 /**
  * A table of facts about the current tree, with names on the left and values on the right.
  */
-final class StatsPanel extends JPanel implements Scrollable {
-  private static final int SCROLL_UNIT = 18;
+final class StatsPanel extends JPanel {
   private static final Map<ShapeClass, String> SHAPE_LABELS = shapeLabels();
 
+  private static final int MAIN_ROWS = 2;
+  private static final String MORE = "More details";
+
   private final JPanel rows = new JPanel();
+  private final JPanel details = new JPanel();
+  private final JToggleButton more = new JToggleButton("▸ " + MORE);
   private final JTextArea error = UiParts.textBlock(UiParts.ERROR);
 
+  /**
+   * Size and block count always show; the other rows open below them.
+   */
   StatsPanel() {
     super(new BorderLayout(0, 4));
-    setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+    setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
     JLabel title = new JLabel("Stats");
     title.setFont(title.getFont().deriveFont(Font.BOLD));
     JPanel top = new JPanel(new BorderLayout(0, 4));
@@ -45,6 +52,20 @@ final class StatsPanel extends JPanel implements Scrollable {
     top.add(error, BorderLayout.CENTER);
     error.setVisible(false);
     rows.setLayout(new BoxLayout(rows, BoxLayout.Y_AXIS));
+    details.setLayout(new BoxLayout(details, BoxLayout.Y_AXIS));
+    details.setAlignmentX(Component.LEFT_ALIGNMENT);
+    details.setVisible(false);
+    more.setAlignmentX(Component.LEFT_ALIGNMENT);
+    more.setHorizontalAlignment(SwingConstants.LEFT);
+    more.setBorderPainted(false);
+    more.setContentAreaFilled(false);
+    more.setForeground(UiParts.MUTED);
+    more.addActionListener(event -> {
+      details.setVisible(more.isSelected());
+      more.setText((more.isSelected() ? "▾ " : "▸ ") + MORE);
+      revalidate();
+      repaint();
+    });
     add(top, BorderLayout.NORTH);
     add(rows, BorderLayout.CENTER);
   }
@@ -77,6 +98,7 @@ final class StatsPanel extends JPanel implements Scrollable {
     Map<String, String> values = new LinkedHashMap<>();
     int[] size = stats.dimensions();
     values.put("Size", size[0] + " × " + size[1] + " × " + size[2]);
+    values.put("Blocks", String.format("%,d", stats.counts().values().stream().mapToInt(Integer::intValue).sum()));
     values.put("Ground", stats.slopeDegrees() == 0 ? "Flat" : String.format("%.1f°", stats.slopeDegrees()));
     SHAPE_LABELS.forEach((shape, label) ->
             values.put(label, String.format("%,d", stats.counts().getOrDefault(shape, 0))));
@@ -123,39 +145,19 @@ final class StatsPanel extends JPanel implements Scrollable {
     error.setText(failed ? stats.error() : "");
     error.setVisible(failed);
     rows.removeAll();
+    details.removeAll();
     Map<String, String> values = rowsFor(stats);
-    int remaining = values.size();
+    int index = 0;
     for (Map.Entry<String, String> entry : values.entrySet()) {
-      remaining--;
+      index++;
       String tip = entry.getKey().equals("Renderer") ? stats.renderer() : entry.getValue();
-      rows.add(row(entry.getKey(), entry.getValue(), tip, remaining > 0));
+      boolean main = index <= MAIN_ROWS;
+      (main ? rows : details).add(row(entry.getKey(), entry.getValue(), tip,
+              main ? index < MAIN_ROWS : index < values.size()));
     }
+    rows.add(more);
+    rows.add(details);
     revalidate();
     repaint();
-  }
-
-  @Override
-  public Dimension getPreferredScrollableViewportSize() {
-    return getPreferredSize();
-  }
-
-  @Override
-  public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
-    return SCROLL_UNIT;
-  }
-
-  @Override
-  public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
-    return visible.height;
-  }
-
-  @Override
-  public boolean getScrollableTracksViewportWidth() {
-    return true;
-  }
-
-  @Override
-  public boolean getScrollableTracksViewportHeight() {
-    return false;
   }
 }

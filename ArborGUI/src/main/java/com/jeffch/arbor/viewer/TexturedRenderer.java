@@ -128,6 +128,7 @@ final class TexturedRenderer implements AutoCloseable {
     glDisable(GL_CULL_FACE);
     meshes.forEach((shapeClass, mesh) -> {
       if (mesh.vertexCount > 0 && state.isVisible(shapeClass)) {
+        program.setInt("uTranslucent", ViewerState.FOLIAGE.contains(shapeClass) ? 1 : 0);
         glBindVertexArray(mesh.vao);
         glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount);
       }

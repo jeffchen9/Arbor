@@ -38,19 +38,10 @@ import java.util.List;
  * @param simple       Whole-tree adjustments from the Simple view.
  * @param decorators   Finishing touches added to the finished tree.
  */
-public record SpeciesPreset(
-        String name,
-        TreeSettings tree,
-        ShapeControl shapeControl,
-        List<ForceSettings> forceList,
-        VoxelSettings shapes,
-        BlockSettings blocks,
-        List<LevelPreset> levels,
-        List<LeafGenerator> leaves,
-        List<PlantLayer> plantLayers,
-        SurvivalSettings survival,
-        SimpleSettings simple,
-        DecoratorSettings decorators) {
+public record SpeciesPreset(String name, TreeSettings tree, ShapeControl shapeControl, List<ForceSettings> forceList,
+                            VoxelSettings shapes, BlockSettings blocks, List<LevelPreset> levels,
+                            List<LeafGenerator> leaves, List<PlantLayer> plantLayers, SurvivalSettings survival,
+                            SimpleSettings simple, DecoratorSettings decorators) {
 
   /**
    * This preset at the overall size rolled for one tree, so every generation step sees the same scale.
@@ -63,17 +54,14 @@ public record SpeciesPreset(
       return this;
     }
     double factor = 1 + TreeRandom.forPath(seed, "tree/sizeVariance").range(-variance, variance);
-    TreeSettings sized = new TreeSettings(tree.sizeScale() * factor, tree.maxHeight(), tree.sink(), tree.roll(),
-            tree.trunkSpread(), 0, tree.ground(), tree.slopeRecovery());
-    return new SpeciesPreset(name, sized, shapeControl, forceList, shapes, blocks, levels, leaves, plantLayers,
-            survival, simple, decorators);
+    TreeSettings sized = new TreeSettings(tree.sizeScale() * factor, tree.maxHeight(), tree.sink(), tree.roll(), tree.trunkSpread(), 0, tree.ground(), tree.slopeRecovery());
+    return new SpeciesPreset(name, sized, shapeControl, forceList, shapes, blocks, levels, leaves, plantLayers, survival, simple, decorators);
   }
 
   /**
    * This preset voxelized with survival mode's own settings and blocks.
    */
   public SpeciesPreset inSurvival() {
-    return new SpeciesPreset(name, tree, shapeControl, forceList, survival.shapes(), survival.blocks(), levels,
-            leaves, plantLayers, survival, simple, decorators);
+    return new SpeciesPreset(name, tree, shapeControl, forceList, survival.shapes(), survival.blocks(), levels, leaves, plantLayers, survival, simple, decorators);
   }
 }

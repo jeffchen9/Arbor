@@ -20,7 +20,7 @@
 
 in vec3 vWorld;
 in vec3 vNormal;
-in vec2 vUv;
+centroid in vec2 vUv;
 in vec3 vTint;
 
 uniform sampler2D uAtlas;
@@ -48,5 +48,6 @@ void main() {
     } else {
         shade = dot(normal, normal) > 0.0 ? faceBrightness(normal) : 1.0;
     }
-    fragColor = vec4(min(texel.rgb * vTint * shade, vec3(1.0)), 1.0);
+    vec3 albedo = texel.rgb * vTint;
+    fragColor = vec4(min(albedo * (shade + transmittedLight(vWorld, normal)), vec3(1.0)), 1.0);
 }

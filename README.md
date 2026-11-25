@@ -24,13 +24,17 @@ the Maven wrapper. From the project folder, run:
 .\mvnw.cmd package
 ```
 
-On macOS or Linux, use `./mvnw package`. This runs the tests and builds `ArborGUI/target/arbor.jar`. To build without
-running the tests, add `-DskipTests`.
+On macOS or Linux, use `sh mvnw package`. This runs the tests and builds `ArborGUI/target/Arbor-<version>.jar` (for example
+`Arbor-1.0.0-SNAPSHOT-1.jar`, from the version in `pom.xml`), which runs on
+Windows, macOS and Linux. To build without running the tests, add `-DskipTests`. The editor needs OpenGL 3.3.
+
+To make a release folder, run `.\release.cmd`. It builds Arbor and copies the jar, `LICENCE`, `arbor.cmd` and
+`arbor.sh` into `Arbor Releases\Arbor-<version>`, next to the project folder. The launchers work from there too.
 
 ## Usage
 
 The commands below are for Windows and must be run from the project folder after building. On macOS or Linux, replace
-`.\arbor.cmd` with `java -jar ArborGUI/target/arbor.jar`.
+`.\arbor.cmd` with `sh arbor.sh` and `.\mvnw.cmd` with `sh mvnw`.
 
 Open the editor, empty or with a preset:
 
@@ -55,7 +59,9 @@ You can also run Arbor through Maven without building the jar first. Arguments g
 ```
 
 The preview uses block textures from your own Minecraft installation, which Arbor looks for automatically. If none is
-found, the editor tells you and lets you pick the game jar yourself, such as `.minecraft\versions\1.21.4\1.21.4.jar`.
+found, the editor tells you and lets you pick the game jar yourself, such as `versions/1.21.4/1.21.4.jar` inside the
+Minecraft folder (`%APPDATA%\.minecraft` on Windows, `~/Library/Application Support/minecraft` on macOS and
+`~/.minecraft` on Linux).
 You can pick another one at any time with **View > Locate Minecraft Jar**, or point to an extracted assets folder with
 `--assets <folder>`. No Minecraft assets are included with Arbor.
 

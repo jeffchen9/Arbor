@@ -20,6 +20,7 @@ uniform int uRealistic;
 uniform vec3 uSunDirection;
 uniform mat4 uLightMatrix;
 uniform sampler2DShadow uShadowMap;
+uniform int uTranslucent;
 
 // Minecraft's fixed face brightness: top 1.0, north and south 0.8, east and west 0.6, bottom 0.5.
 float faceBrightness(vec3 n) {
@@ -52,4 +53,16 @@ float realisticBrightness(vec3 world, vec3 normal) {
     float sky = 0.34 + 0.2 * (normal.y * 0.5 + 0.5);
     float facing = max(dot(normal, uSunDirection), 0.0);
     return sky + (facing > 0.0 ? 0.82 * facing * sunVisibility(world, normal) : 0.0);
+}
+
+// Subsurface scattering for leaves and plants: sunlight passing through a thin leaf lights the side turned away from
+// the sun, tinted warm by the leaf. The sun is looked up a block toward it, on the leaf's lit side. Zero without
+// realistic lighting or for solid blocks.
+vec3 transmittedLight(vec3 world, vec3 normal) {
+    if (uRealistic != 1 || uTranslucent != 1) {
+        return vec3(0.0);
+    }
+    float behind = dot(normal, normal) < 0.0001 ? 0.5 : max(-dot(normal, uSunDirection), 0.0);
+    float light = behind * sunVisibility(world + uSunDirection * 1.2, uSunDirection);
+    return 0.6 * light * vec3(1.1, 1.15, 0.7);
 }

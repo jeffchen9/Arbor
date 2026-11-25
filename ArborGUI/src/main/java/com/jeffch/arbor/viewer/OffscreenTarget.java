@@ -25,12 +25,20 @@ import java.nio.ByteBuffer;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
- * A color and depth render target, so frames can be composited and saved reliably.
+ * A color and depth render target, so frames can be composited and saved reliably. Drawing goes first into a
+ * multisampled copy, which smooths edges, and is resolved into plain textures before it is read or its depth sampled.
  */
 public final class OffscreenTarget implements AutoCloseable {
+  private static final int MAX_SAMPLES = 4;
+
   private final int framebuffer = glGenFramebuffers();
   private final int color = glGenTextures();
   private final int depth = glGenTextures();
+  private final int samples = Math.min(MAX_SAMPLES, glGetInteger(GL_MAX_SAMPLES));
+  private final int multisampled = samples > 1 ? glGenFramebuffers() : 0;
+  private final int multisampledColor = samples > 1 ? glGenRenderbuffers() : 0;
+  private final int multisampledDepth = samples > 1 ? glGenRenderbuffers() : 0;
+  private boolean resolved;
   private int width;
   private int height;
 
@@ -70,15 +78,48 @@ public final class OffscreenTarget implements AutoCloseable {
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
       throw new IllegalStateException("offscreen framebuffer is incomplete");
     }
+    if (multisampled != 0) {
+      glBindRenderbuffer(GL_RENDERBUFFER, multisampledColor);
+      glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_RGBA8, width, height);
+      glBindRenderbuffer(GL_RENDERBUFFER, multisampledDepth);
+      glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT24, width, height);
+      glBindRenderbuffer(GL_RENDERBUFFER, 0);
+      glBindFramebuffer(GL_FRAMEBUFFER, multisampled);
+      glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, multisampledColor);
+      glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, multisampledDepth);
+      if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        throw new IllegalStateException("multisampled framebuffer is incomplete");
+      }
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
   /**
-   * Draws into this target from now on, at its full size.
+   * Draws into this target from now on, at its full size, starting a new frame in the multisampled copy.
    */
   public void bind() {
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    resolved = multisampled == 0;
+    glBindFramebuffer(GL_FRAMEBUFFER, resolved ? framebuffer : multisampled);
     glViewport(0, 0, width, height);
+  }
+
+  /**
+   * Averages the multisampled frame into the plain textures, and draws there from now on, without smoothing. Called
+   * before sampling the depth texture and before reading; does nothing when already resolved.
+   */
+  public void resolve() {
+    if (resolved) {
+      return;
+    }
+    resolved = true;
+    int[] viewport = new int[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, multisampled);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+    glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
+            GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
   }
 
   /**
@@ -108,6 +149,7 @@ public final class OffscreenTarget implements AutoCloseable {
    * @param pixels Receives the pixels.
    */
   public ByteBuffer readPixels(ByteBuffer pixels) {
+    resolve();
     glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
@@ -138,5 +180,10 @@ public final class OffscreenTarget implements AutoCloseable {
     glDeleteFramebuffers(framebuffer);
     glDeleteTextures(color);
     glDeleteTextures(depth);
+    if (multisampled != 0) {
+      glDeleteFramebuffers(multisampled);
+      glDeleteRenderbuffers(multisampledColor);
+      glDeleteRenderbuffers(multisampledDepth);
+    }
   }
 }

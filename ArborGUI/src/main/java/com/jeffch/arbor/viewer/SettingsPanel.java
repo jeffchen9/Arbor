@@ -122,10 +122,8 @@ final class SettingsPanel extends JPanel {
     exportControls = new ExportControls(document);
     ruleEditor = new BlockRuleEditor(document, (role, current, picked) -> blockPicker(role, false, current, picked),
             path -> weightsControl(document.field(path)), this::structuralLater, this::edited);
-    JButton revert = new JButton("Revert");
-    revert.addActionListener(event -> revert());
+    // Revert is in the File menu.
     JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    buttons.add(revert);
     buttons.add(status);
     JPanel top = new JPanel(new BorderLayout());
     top.add(buttons, BorderLayout.NORTH);

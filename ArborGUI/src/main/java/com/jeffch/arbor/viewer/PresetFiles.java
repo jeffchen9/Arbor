@@ -40,7 +40,7 @@ import java.util.Locale;
  */
 final class PresetFiles {
   static final List<String> TEMPLATES = List.of("oak", "apple", "birch", "forest_beech", "spruce",
-          "western_hemlock", "shore_pine", "palm");
+          "western_hemlock", "shore_pine", "palm", "willow");
   private static final String STARTING_TEMPLATE = "oak";
   private static final String NEW_NAME = "new_tree";
 
@@ -256,12 +256,20 @@ final class PresetFiles {
   }
 
   /**
-   * Starts a new preset from a bundled one, asking first if there are unsaved changes.
+   * Starts a new preset from a bundled one, keeping the Simple sliders as they are, and asking first if there are
+   * unsaved changes.
    *
    * @param template Bundled preset name.
    */
   void startFrom(String template) {
-    afterEdits(() -> replaceWith(() -> fromTemplate(template)));
+    afterEdits(() -> replaceWith(() -> {
+      PresetDocument next = fromTemplate(template);
+      PresetDocument current = app.document();
+      if (current != null) {
+        next.keepSimpleFrom(current);
+      }
+      return next;
+    }));
   }
 
   /**

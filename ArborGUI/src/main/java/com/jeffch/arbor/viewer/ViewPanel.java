@@ -29,6 +29,9 @@ import java.nio.ByteBuffer;
  * Shows frames rendered by OpenGL and turns mouse drags into camera moves.
  */
 final class ViewPanel extends JPanel {
+  static final String CAMERA_HELP = "Drag to orbit. Right, middle or Shift drag to pan. Scroll or pinch to zoom; "
+          + "scroll sideways to turn.";
+  private static final double WHEEL_ORBIT_PIXELS = 12;
   private BufferedImage image;
   private int lastX;
   private int lastY;
@@ -55,16 +58,22 @@ final class ViewPanel extends JPanel {
         double dy = (event.getY() - lastY) * scale;
         lastX = event.getX();
         lastY = event.getY();
-        if (SwingUtilities.isLeftMouseButton(event)) {
+        // Shift with a left drag pans too, for touchpads without a middle or easy right drag.
+        if (SwingUtilities.isLeftMouseButton(event) && !event.isShiftDown()) {
           app.orbitCamera(dx, dy);
-        } else if (SwingUtilities.isRightMouseButton(event)) {
+        } else {
           app.panCamera(dx, dy);
         }
       }
 
       @Override
       public void mouseWheelMoved(MouseWheelEvent event) {
-        app.zoomCamera(-event.getPreciseWheelRotation());
+        // Touchpads send a sideways two-finger swipe as a wheel turn with Shift held, and a pinch as one with Ctrl.
+        if (event.isShiftDown()) {
+          app.orbitCamera(-event.getPreciseWheelRotation() * WHEEL_ORBIT_PIXELS, 0);
+        } else {
+          app.zoomCamera(-event.getPreciseWheelRotation());
+        }
       }
     };
     addMouseListener(mouse);

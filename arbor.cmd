@@ -19,5 +19,13 @@ set "JAVA_CMD=java"
 if defined JAVA_HOME set "JAVA_CMD=%JAVA_HOME%\bin\java.exe"
 set "UNSAFE_FLAG="
 "%JAVA_CMD%" --sun-misc-unsafe-memory-access=allow -version >nul 2>&1 && set "UNSAFE_FLAG=--sun-misc-unsafe-memory-access=allow"
-"%JAVA_CMD%" %UNSAFE_FLAG% --enable-native-access=ALL-UNNAMED -jar "%~dp0ArborGUI\target\arbor.jar" %*
+REM The jar is named after the version. A release keeps it beside this file; in the project, the newest one built is used.
+set "JAR="
+for /f "delims=" %%F in ('dir /b /o:d "%~dp0Arbor-*.jar" 2^>nul') do set "JAR=%~dp0%%F"
+if not defined JAR for /f "delims=" %%F in ('dir /b /o:d "%~dp0ArborGUI\target\Arbor-*.jar" 2^>nul') do set "JAR=%~dp0ArborGUI\target\%%F"
+if not defined JAR (
+  echo Arbor is not built yet. Build it first with: .\mvnw.cmd package 1>&2
+  exit /b 1
+)
+"%JAVA_CMD%" %UNSAFE_FLAG% --enable-native-access=ALL-UNNAMED -jar "%JAR%" %*
 exit /b %ERRORLEVEL%

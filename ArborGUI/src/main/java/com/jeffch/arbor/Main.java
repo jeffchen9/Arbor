@@ -35,8 +35,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 
 /**
- * The program's entry point: {@code arbor export ...} writes schematics, and anything else opens the editor or, with
- * {@code --screenshot}, renders one image without a window.
+ * Entry point to program.
  */
 public final class Main {
   /**
@@ -44,14 +43,12 @@ public final class Main {
    */
   private static final int BAD_INPUT = 2;
 
+  /**
+   * Prevent instantiation
+   */
   private Main() {
   }
 
-  /**
-   * Runs the command and exits with its result code.
-   *
-   * @param args Command line arguments.
-   */
   public static void main(String[] args) {
     System.exit(run(args, System.out, System.err));
   }
@@ -60,9 +57,9 @@ public final class Main {
    * Runs a command and returns its exit code instead of exiting, so tests can call it. Problems are printed as one
    * readable line, never a stack trace.
    *
-   * @param args Command line arguments.
-   * @param out  Receives normal output.
-   * @param err  Receives errors.
+   * @param args command line arguments.
+   * @param out  output stream.
+   * @param err  error stream.
    */
   public static int run(String[] args, PrintStream out, PrintStream err) {
     if (args.length > 0 && args[0].equals("export")) {

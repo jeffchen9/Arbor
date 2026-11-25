@@ -37,6 +37,10 @@ public final class BlockModels {
   private static final double[][] NORMALS = {
           {0, -1, 0}, {0, 1, 0}, {0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}};
   private static final String[] FACE_NAMES = {"down", "up", "north", "south", "west", "east"};
+  /**
+   * The axis each face looks along: 0 is x, 1 is y, 2 is z.
+   */
+  private static final int[] FACE_AXES = {1, 1, 2, 2, 0, 0};
 
   private final Path stateDir;
   private final Path modelDir;
@@ -578,6 +582,11 @@ public final class BlockModels {
     for (int d = 0; d < 6; d++) {
       JsonNode face = faces.get(FACE_NAMES[d]);
       if (face == null || !face.has("texture")) continue;
+      // A flat plane, such as a crossed plant, has a face on each side in the same place. Minecraft culls the back
+      // one, but every quad here shows from both sides, so the second would z-fight the first in stripes.
+      int faceAxis = FACE_AXES[d];
+      JsonNode opposite = faces.get(FACE_NAMES[d ^ 1]);
+      if (d % 2 == 1 && from[faceAxis] == to[faceAxis] && opposite != null && opposite.has("texture")) continue;
       double[][] p = cornerPositions(d, from, to);
       double[] n = NORMALS[d].clone();
       for (double[] v : p) for (int i = 0; i < 3; i++) v[i] /= 16;

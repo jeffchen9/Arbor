@@ -34,8 +34,9 @@ import static com.jeffch.arbor.viewer.UiParts.row;
 /**
  * The view controls and readouts.
  */
-final class ControlPanel extends JPanel {
+final class ControlPanel extends JPanel implements Scrollable {
   static final Map<String, Set<ShapeClass>> SHOW_GROUPS = showGroups();
+  private static final int SCROLL_UNIT = 18;
   private static final int RANDOM_SEED_LIMIT = 1_000_000;
   private static final int SLIDER_STEPS = 1000;
   private final Consumer<Consumer<ViewerState>> view;
@@ -66,6 +67,10 @@ final class ControlPanel extends JPanel {
     JButton reset = new JButton("Reset camera");
     reset.addActionListener(event -> resetCamera.run());
     add(row(reset));
+    JTextArea help = UiParts.textBlock(UiParts.MUTED);
+    help.setText(ViewPanel.CAMERA_HELP);
+    help.setAlignmentX(Component.LEFT_ALIGNMENT);
+    add(help);
 
     section("View");
     JRadioButton voxels = new JRadioButton("Voxels", !state.branchView);
@@ -80,8 +85,21 @@ final class ControlPanel extends JPanel {
     add(notice);
 
     section("Show");
-    SHOW_GROUPS.forEach((label, shapes) -> voxelToggle(label, state.isVisible(shapes.iterator().next()),
-            (viewer, on) -> shapes.forEach(shape -> viewer.setVisible(shape, on))));
+    Map<String, JCheckBox> shown = new HashMap<>();
+    SHOW_GROUPS.forEach((label, shapes) -> shown.put(label, voxelToggle(label,
+            state.isVisible(shapes.iterator().next()),
+            (viewer, on) -> shapes.forEach(shape -> viewer.setVisible(shape, on)))));
+    // Unticks Plants and Leaf blocks together, leaving only the trunk and branches; ticking it again shows them.
+    JCheckBox woodOnly = new JCheckBox("Wood only (hide leaves and plants)");
+    woodOnly.setAlignmentX(Component.LEFT_ALIGNMENT);
+    woodOnly.addActionListener(event -> List.of("Plants", "Leaf blocks").forEach(label -> {
+      JCheckBox box = shown.get(label);
+      if (box.isSelected() == woodOnly.isSelected()) {
+        box.doClick();
+      }
+    }));
+    voxelControls.add(woodOnly);
+    add(woodOnly);
     voxelToggle("Skeleton lines", state.showSkeleton, (viewer, on) -> viewer.showSkeleton = on);
     voxelToggle("Voxel grid", state.showVoxelGrid, (viewer, on) -> viewer.showVoxelGrid = on);
     add(toggle("Leaf density", state.showDensity, (viewer, on) -> viewer.showDensity = on));
@@ -92,8 +110,40 @@ final class ControlPanel extends JPanel {
     addSlider("Threshold", 0, 0.95f, state.densityThreshold, (viewer, value) -> viewer.densityThreshold = value);
     addSlider("Opacity", 0.05f, 6, state.densityOpacity, (viewer, value) -> viewer.densityOpacity = value);
 
-    add(Box.createVerticalGlue());
+    statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+    add(statsPanel);
     setBranchView(state.branchView);
+  }
+
+  @Override
+  public Dimension getPreferredScrollableViewportSize() {
+    return getPreferredSize();
+  }
+
+  @Override
+  public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+    return SCROLL_UNIT;
+  }
+
+  @Override
+  public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+    return visible.height;
+  }
+
+  /**
+   * Fills the column's width, so text wraps to it.
+   */
+  @Override
+  public boolean getScrollableTracksViewportWidth() {
+    return true;
+  }
+
+  /**
+   * Keeps its own height, so each section sits right below the one above instead of spreading out to fill the column.
+   */
+  @Override
+  public boolean getScrollableTracksViewportHeight() {
+    return false;
   }
 
   /**
@@ -205,10 +255,11 @@ final class ControlPanel extends JPanel {
    * @param selected Whether it starts checked.
    * @param apply    Sets the view setting.
    */
-  private void voxelToggle(String label, boolean selected, BiConsumer<ViewerState, Boolean> apply) {
+  private JCheckBox voxelToggle(String label, boolean selected, BiConsumer<ViewerState, Boolean> apply) {
     JCheckBox box = toggle(label, selected, apply);
     voxelControls.add(box);
     add(box);
+    return box;
   }
 
   /**
@@ -282,10 +333,6 @@ final class ControlPanel extends JPanel {
     show(forces, stats.forces().isEmpty() ? "No sun or wind on this tree" : stats.forces());
     statsPanel.show(stats);
     revalidate();
-  }
-
-  StatsPanel statsPanel() {
-    return statsPanel;
   }
 
   /**

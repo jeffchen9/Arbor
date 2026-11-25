@@ -48,7 +48,7 @@ final class MinecraftAssets {
   }
 
   /**
-   * The assets of the newest version in the standard Windows install, or empty when there is none to read.
+   * The assets of the newest version in this system's standard Minecraft install, or empty when there is none.
    */
   static Optional<Path> installed() {
     Path versions = versionsFolder();
@@ -56,20 +56,58 @@ final class MinecraftAssets {
   }
 
   /**
-   * The standard Windows {@code .minecraft/versions} folder, or null when the system does not say where it is.
+   * The {@code versions} folder of the standard Minecraft install on this system, or null when it cannot be told.
    */
   static Path versionsFolder() {
-    String roaming = System.getenv("APPDATA");
-    return roaming == null ? null : Path.of(roaming, ".minecraft", "versions");
+    return versionsFolder(System.getProperty("os.name", ""), System.getenv("APPDATA"),
+            System.getProperty("user.home"));
   }
 
   /**
-   * The per-user folder that holds extracted assets, outside the project.
+   * Where the Minecraft launcher installs the game on each system: {@code %APPDATA%\.minecraft} on Windows,
+   * {@code ~/Library/Application Support/minecraft} on macOS and {@code ~/.minecraft} elsewhere.
+   *
+   * @param os      Operating system name, as in the {@code os.name} property.
+   * @param appData Value of {@code APPDATA}, or null.
+   * @param home    The user's home folder, or null.
+   * @return The {@code versions} folder, or null when the system does not say where it is.
+   */
+  static Path versionsFolder(String os, String appData, String home) {
+    String name = os.toLowerCase(Locale.ROOT);
+    if (name.startsWith("windows")) {
+      return appData == null ? null : Path.of(appData, ".minecraft", "versions");
+    }
+    if (home == null) {
+      return null;
+    }
+    return name.startsWith("mac") ? Path.of(home, "Library", "Application Support", "minecraft", "versions")
+            : Path.of(home, ".minecraft", "versions");
+  }
+
+  /**
+   * The per-user folder that holds extracted assets on this system, outside the project.
    */
   static Path cacheFolder() {
-    String local = System.getenv("LOCALAPPDATA");
-    Path base = local != null ? Path.of(local, "Arbor") : Path.of(System.getProperty("user.home"), ".arbor");
-    return base.resolve("minecraft-assets");
+    return cacheFolder(System.getProperty("os.name", ""), System.getenv("LOCALAPPDATA"),
+            System.getProperty("user.home"));
+  }
+
+  /**
+   * The usual place for a program's cache on each system: {@code %LOCALAPPDATA%} on Windows, {@code ~/Library/Caches}
+   * on macOS and {@code ~/.cache} elsewhere.
+   *
+   * @param os           Operating system name, as in the {@code os.name} property.
+   * @param localAppData Value of {@code LOCALAPPDATA}, or null.
+   * @param home         The user's home folder.
+   * @return The folder for extracted assets.
+   */
+  static Path cacheFolder(String os, String localAppData, String home) {
+    String name = os.toLowerCase(Locale.ROOT);
+    if (name.startsWith("windows") && localAppData != null) {
+      return Path.of(localAppData, "Arbor", "minecraft-assets");
+    }
+    return name.startsWith("mac") ? Path.of(home, "Library", "Caches", "Arbor", "minecraft-assets")
+            : Path.of(home, ".cache", "arbor", "minecraft-assets");
   }
 
   /**

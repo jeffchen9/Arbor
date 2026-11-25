@@ -38,7 +38,7 @@ final class ExportControls extends JPanel implements AutoCloseable {
   private static final int PROGRESS_MILLIS = 150;
 
   private final PresetDocument document;
-  private final JSpinner count = new JSpinner(new SpinnerNumberModel(100, 1, MAX_COUNT, 10));
+  private final JSpinner count = new JSpinner(new SpinnerNumberModel(10, 1, MAX_COUNT, 10));
   private final JTextField folder = new JTextField();
   private final JTextField name = new JTextField();
   private final JButton browse = new JButton("Browse...");

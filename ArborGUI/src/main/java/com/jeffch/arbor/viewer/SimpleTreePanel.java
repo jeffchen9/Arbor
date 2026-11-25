@@ -35,16 +35,16 @@ final class SimpleTreePanel extends JPanel {
   private static final int HALF_TRAVEL = 100;
   private static final double PRECISION = 100;
   private static final List<Control> CONTROLS = List.of(
-          new Control("height", 0.5, 2, "×", "Makes the trunk shorter or taller"),
-          new Control("crownWidth", 0.5, 2, "×", "Makes the crown narrower or wider"),
-          new Control("trunkThickness", 0.5, 2, "×", "Makes the trunk thinner or thicker"),
-          new Control("branchDensity", 0.5, 2, "×", "Changes the total number of branches"),
-          new Control("branchAngle", -30, 30, "°", "Turns branches toward or away from their parent"),
-          new Control("droop", -1, 1, "", "Lifts branches up or lets them hang down"),
-          new Control("twist", 0, 3, "×", "Makes branches straighter or more wandering"),
-          new Control("leafFullness", 0.5, 1.5, "×", "Makes foliage thinner or fuller"),
-          new Control("windLean", 0, 1, "", "Leans the tree in a steady wind"),
-          new Control("sizeVariety", 0, 0.5, "", "How much tree size differs between seeds"));
+          new Control("height", 0.25, 3, "×", "Makes the trunk shorter or taller"),
+          new Control("crownWidth", 0.25, 3, "×", "Makes the crown narrower or wider"),
+          new Control("trunkThickness", 0.25, 3, "×", "Makes the trunk thinner or thicker"),
+          new Control("branchDensity", 0.25, 3, "×", "Changes the total number of branches"),
+          new Control("branchAngle", -60, 60, "°", "Turns branches toward or away from their parent"),
+          new Control("droop", -2, 2, "", "Lifts branches up or lets them hang down"),
+          new Control("twist", 0, 5, "×", "Makes branches straighter or more wandering"),
+          new Control("leafFullness", 0.25, 2, "×", "Makes foliage thinner or fuller"),
+          new Control("windLean", 0, 2, "", "Leans the tree in a steady wind"),
+          new Control("sizeVariety", 0, 1, "", "How much tree size differs between seeds"));
   private final PresetDocument document;
   private final Runnable edited;
   private final List<JSlider> sliders = new ArrayList<>();

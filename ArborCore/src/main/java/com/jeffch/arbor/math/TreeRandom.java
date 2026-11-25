@@ -51,26 +51,30 @@ public final class TreeRandom {
   }
 
   /**
-   * A uniform value in [0, 1).
+   * Generate a uniform value in [0, 1).
+   *
+   * @return the uniform value.
    */
   public double nextDouble() {
     return random.nextDouble();
   }
 
   /**
-   * A uniform value in [min, max).
+   * Generate a uniform value in [min, max).
    *
-   * @param min Lowest value.
-   * @param max Value never reached.
+   * @param min the minimum value.
+   * @param max the maximum value.
+   * @return the uniform value.
    */
   public double range(double min, double max) {
     return min + (max - min) * random.nextDouble();
   }
 
   /**
-   * True with the given probability.
+   * Generate a boolean with the given probability.
    *
-   * @param probability Chance from 0 to 1.
+   * @param probability the probability from 0 to 1.
+   * @return {@code true} or {@code false}.
    */
   public boolean chance(double probability) {
     return random.nextDouble() < probability;

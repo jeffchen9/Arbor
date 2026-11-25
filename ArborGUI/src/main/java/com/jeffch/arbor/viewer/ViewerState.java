@@ -27,6 +27,11 @@ import java.util.Set;
  * User-controlled viewer settings.
  */
 public final class ViewerState {
+  /**
+   * Leaves and plants: thin enough to let light through, and hidden together by "Wood only".
+   */
+  public static final Set<ShapeClass> FOLIAGE = EnumSet.of(ShapeClass.LEAVES, ShapeClass.PLANT,
+          ShapeClass.DEAD_BUSH, ShapeClass.SAPLING);
   private final Set<ShapeClass> visible = EnumSet.allOf(ShapeClass.class);
   public long seed;
   public boolean showDensity;

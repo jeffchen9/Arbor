@@ -33,8 +33,10 @@ import org.joml.Vector3f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GL;
+import org.lwjgl.system.Configuration;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
@@ -42,10 +44,10 @@ import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -58,9 +60,7 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
- * The interactive tree viewer and one-frame screenshot renderer. OpenGL stays on the calling thread and draws into an
- * offscreen target; each frame is shown in a Swing panel. Swing owns the preset document, and reaches the render
- * thread only through the command queue.
+ * The interactive tree viewer and one-frame screenshot renderer.
  */
 public final class ViewerApp {
   private static final int DEFAULT_WIDTH = 1280;
@@ -220,6 +220,12 @@ public final class ViewerApp {
    * tree. All drawing happens off screen; the window only shows the finished image.
    */
   private void open() {
+    if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("mac")) {
+      // On macOS, GLFW must run on the main thread, which AWT and Swing own. LWJGL's async build passes GLFW's work to
+      // that thread instead, so no -XstartOnFirstThread is needed. AWT is started first so the main thread is ready.
+      Configuration.GLFW_LIBRARY_NAME.set("glfw_async");
+      Toolkit.getDefaultToolkit();
+    }
     GLFWErrorCallback.createPrint(System.err).set();
     if (!glfwInit()) {
       throw new IllegalStateException("cannot initialize GLFW");
@@ -329,8 +335,8 @@ public final class ViewerApp {
     String message = (reason != null ? reason
             : "Arbor could not find an up-to-date Minecraft installation, so the preview shows plain colours "
             + "instead of block textures.")
-            + "\n\nYou can locate the Minecraft game jar yourself, for example "
-            + ".minecraft\\versions\\1.21.4\\1.21.4.jar. Arbor reads only block models and textures from it and "
+            + "\n\nYou can locate the Minecraft game jar yourself, for example " + exampleJar()
+            + ". Arbor reads only block models and textures from it and "
             + "remembers your choice.\n\nYou can also do this later from View > Locate Minecraft Jar.";
     Object[] choices = {"Locate Jar...", "Continue Without Textures"};
     int picked = JOptionPane.showOptionDialog(frame, dialogText(message), "Minecraft Textures Not Found",
@@ -338,6 +344,15 @@ public final class ViewerApp {
     if (picked == 0) {
       locateMinecraftJar();
     }
+  }
+
+  /**
+   * Where a game jar usually is on this system, as an example for the user.
+   */
+  private static String exampleJar() {
+    Path versions = MinecraftAssets.versionsFolder();
+    Path example = Path.of("1.21.4", "1.21.4.jar");
+    return (versions == null ? Path.of("versions").resolve(example) : versions.resolve(example)).toString();
   }
 
   /**
@@ -419,8 +434,8 @@ public final class ViewerApp {
    */
   private void reportUnusableJar(Path jar, String reason) {
     JOptionPane.showMessageDialog(frame, dialogText("Arbor could not use this file:\n" + jar + "\n\n" + reason
-                    + "\n\nPick the game jar inside your Minecraft versions folder, for example "
-                    + ".minecraft\\versions\\1.21.4\\1.21.4.jar."),
+                    + "\n\nPick the game jar inside your Minecraft versions folder, for example " + exampleJar()
+                    + "."),
             "Not a Minecraft Game Jar", JOptionPane.ERROR_MESSAGE);
   }
 
@@ -593,12 +608,7 @@ public final class ViewerApp {
     controls.getVerticalScrollBar().setUnitIncrement(18);
     controls.setBorder(null);
     controls.setPreferredSize(new Dimension(280, 300));
-    JScrollPane statsPane = new JScrollPane(panel.statsPanel(), JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-    statsPane.setBorder(null);
-    JSplitPane leftColumn = new JSplitPane(JSplitPane.VERTICAL_SPLIT, controls, statsPane);
-    leftColumn.setResizeWeight(1);
-    JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftColumn, viewPanel);
+    JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controls, viewPanel);
     split.setResizeWeight(0);
     frame = new JFrame("Arbor");
     frame.setLayout(new BorderLayout());
@@ -911,7 +921,8 @@ public final class ViewerApp {
    * @param height Frame height in pixels.
    */
   private void renderScene(int width, int height) {
-    ShadowMap shadows = currentShadows();
+    // Branch view shows plain lines over the grid, without lighting or the white ground.
+    ShadowMap shadows = state.drawsShapes() ? currentShadows() : null;
     target.ensureSize(width, height);
     target.bind();
     glEnable(GL_DEPTH_TEST);
@@ -921,12 +932,14 @@ public final class ViewerApp {
     if (state.splitView) {
       int leftWidth = Math.max(1, (width - SPLIT_DIVIDER) / 2);
       int rightStart = leftWidth + SPLIT_DIVIDER;
+      // Blocks first: the density cloud ends smoothing, since it reads depth from the resolved frame.
+      usePane(rightStart, Math.max(1, width - rightStart), height);
+      drawBlocks(shadows, false, false);
       usePane(0, leftWidth, height);
       sceneLines.draw(viewProjection);
       drawSkeleton();
+      drawDensity();
       drawForces();
-      usePane(rightStart, Math.max(1, width - rightStart), height);
-      drawBlocks(shadows, false);
       glEnable(GL_SCISSOR_TEST);
       glScissor(leftWidth, 0, SPLIT_DIVIDER, height);
       glClearColor(0.42f, 0.45f, 0.5f, 1);
@@ -934,7 +947,7 @@ public final class ViewerApp {
       glDisable(GL_SCISSOR_TEST);
     } else {
       usePane(0, width, height);
-      drawBlocks(shadows, state.drawsSkeleton());
+      drawBlocks(shadows, state.drawsSkeleton(), true);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
@@ -978,8 +991,9 @@ public final class ViewerApp {
    *
    * @param shadows      Shadow map, or null for Minecraft face shading.
    * @param withSkeleton Whether to draw the skeleton lines.
+   * @param withDensity  Whether the leaf density cloud belongs in this pane; split view shows it with the wireframe.
    */
-  private void drawBlocks(ShadowMap shadows, boolean withSkeleton) {
+  private void drawBlocks(ShadowMap shadows, boolean withSkeleton, boolean withDensity) {
     if (shadows != null) {
       groundRenderer.draw(viewProjection, shadows);
     } else {
@@ -999,12 +1013,22 @@ public final class ViewerApp {
     if (withSkeleton) {
       drawSkeleton();
     }
+    if (withDensity) {
+      drawDensity();
+    }
+    drawForces();
+  }
+
+  /**
+   * Draws the leaf density cloud, when shown, hidden behind whatever is already drawn.
+   */
+  private void drawDensity() {
     if (state.showDensity && density.hasVolume()) {
+      target.resolve();
       target.detachDepth();
       density.render(view, projection, target.depthTexture(), state.densityThreshold, state.densityOpacity);
       target.attachDepth();
     }
-    drawForces();
   }
 
   /**

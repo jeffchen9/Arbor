@@ -67,9 +67,8 @@ public final class TreeGenerator {
       } else {
         plantLayers = PlantLayerPlacer.apply(skeleton, preset, density, seed, shapes, budget);
       }
-      if (!preset.tree().ground().flat()) {
-        shapes.removeIf(preset.tree().ground()::buries);
-      }
+      // Nothing goes below the ground, flat or sloped, such as long hanging strands.
+      shapes.removeIf(preset.tree().ground()::buries);
       if (survival) {
         SurvivalBlocks.finish(shapes, skeleton);
       } else if (preset.shapes().removeDetached()) {

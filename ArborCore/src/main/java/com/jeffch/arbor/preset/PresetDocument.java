@@ -1279,6 +1279,18 @@ public final class PresetDocument {
   }
 
   /**
+   * Moves the Simple sliders the same way they were moved in another preset, such as the tree this one replaces as the
+   * starting tree. Sliders left at neutral there keep this preset's own neutral values.
+   *
+   * @param previous Preset whose Simple sliders to copy.
+   */
+  public void keepSimpleFrom(PresetDocument previous) {
+    if (previous.value("simple") instanceof ObjectNode stored) {
+      stored.fieldNames().forEachRemaining(key -> setSimpleValue(key, stored.get(key).asDouble()));
+    }
+  }
+
+  /**
    * Returns every Simple slider to neutral.
    */
   public void resetSimple() {

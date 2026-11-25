@@ -104,7 +104,9 @@ public final class SurvivalBlocks {
   }
 
   /**
-   * Survival has no fences or walls, so each becomes a log whose grain follows the wood around it.
+   * Survival has no fences or walls, so each becomes a log whose grain follows the wood around it. Fence paths step
+   * one face at a time, which as logs looks too thick, so a converted block that only fills the corner of a step is
+   * left out and the branch runs diagonally instead. Logs need not touch by faces to hold leaves or stay attached.
    *
    * @param grid The tree's shapes; changed in place.
    */
@@ -117,7 +119,68 @@ public final class SurvivalBlocks {
     });
     Map<int[], GrainAxis> axes = new HashMap<>();
     thin.forEach(block -> axes.put(block, grainAt(grid, block[0], block[1], block[2])));
-    axes.forEach((block, axis) -> grid.put(block[0], block[1], block[2], new Shape.FullBlock(axis)));
+    Set<Long> dropped = new HashSet<>();
+    for (int[] block : thin) {
+      if (onlyFillsACorner(grid, dropped, block)) {
+        dropped.add(ShapeGrid.key(block[0], block[1], block[2]));
+      }
+    }
+    axes.forEach((block, axis) -> {
+      if (!dropped.contains(ShapeGrid.key(block[0], block[1], block[2]))) {
+        grid.put(block[0], block[1], block[2], new Shape.FullBlock(axis));
+      }
+    });
+    grid.removeIf((x, y, z) -> dropped.contains(ShapeGrid.key(x, y, z)));
+  }
+
+  /**
+   * Whether a block can go without splitting the wood around it: it touches wood by a face on at least two sides, and
+   * all its wooden neighbors still touch one another, by a face, edge or corner, without it. A branch tip or a block in
+   * a straight run stays.
+   *
+   * @param grid    The tree's shapes.
+   * @param dropped Blocks already left out, which no longer count as wood.
+   * @param block   The block to check.
+   */
+  private static boolean onlyFillsACorner(ShapeGrid grid, Set<Long> dropped, int[] block) {
+    List<int[]> around = new ArrayList<>();
+    for (int dx = -1; dx <= 1; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        for (int dz = -1; dz <= 1; dz++) {
+          int x = block[0] + dx;
+          int y = block[1] + dy;
+          int z = block[2] + dz;
+          if ((dx != 0 || dy != 0 || dz != 0) && wood(grid, x, y, z) == 1
+                  && !dropped.contains(ShapeGrid.key(x, y, z))) {
+            around.add(new int[]{dx, dy, dz});
+          }
+        }
+      }
+    }
+    // A step's corner touches wood by a face on two sides; the end of a branch touches it on only one.
+    long faces = around.stream().filter(offset -> Math.abs(offset[0]) + Math.abs(offset[1]) + Math.abs(offset[2]) == 1)
+            .count();
+    if (faces < 2) {
+      return false;
+    }
+    // Spread from one neighbor to the others that touch it; every neighbor must be reached.
+    boolean[] reached = new boolean[around.size()];
+    ArrayDeque<Integer> open = new ArrayDeque<>(List.of(0));
+    reached[0] = true;
+    int count = 1;
+    while (!open.isEmpty()) {
+      int[] from = around.get(open.poll());
+      for (int i = 0; i < around.size(); i++) {
+        int[] to = around.get(i);
+        if (!reached[i] && Math.abs(from[0] - to[0]) <= 1 && Math.abs(from[1] - to[1]) <= 1
+                && Math.abs(from[2] - to[2]) <= 1) {
+          reached[i] = true;
+          count++;
+          open.add(i);
+        }
+      }
+    }
+    return count == around.size();
   }
 
   /**
