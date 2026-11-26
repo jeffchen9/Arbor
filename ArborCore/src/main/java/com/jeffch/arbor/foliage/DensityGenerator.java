@@ -208,12 +208,8 @@ public final class DensityGenerator {
    * @param value Input value.
    */
   private static double smoothstep(double from, double to, double value) {
-    double t = clamp((value - from) / (to - from), 0, 1);
+    double t = Math.clamp((value - from) / (to - from), 0, 1);
     return t * t * (3 - 2 * t);
-  }
-
-  private static double clamp(double value, double min, double max) {
-    return Math.max(min, Math.min(max, value));
   }
 
   /**
@@ -263,7 +259,7 @@ public final class DensityGenerator {
     }
     float[] data = new float[remaining.length];
     for (int i = 0; i < data.length; i++) {
-      data[i] = Math.max(0, Math.min(1, 1 - remaining[i]));
+      data[i] = Math.clamp(1 - remaining[i], 0, 1);
     }
     return new DensityField(min, size, data);
   }
@@ -328,7 +324,7 @@ public final class DensityGenerator {
         double size = Math.max(0, resolver.bind(leaf.size(), prefix + ".size", owner).at(t)) * scale
                 + Math.max(0, resolver.bind(leaf.sizePercentOfParent(), prefix + ".sizePercentOfParent", owner).at(t))
                 * sampler.length();
-        double strength = clamp(resolver.bind(leaf.strength(), prefix + ".strength", owner).at(t), 0, 1);
+        double strength = Math.clamp(resolver.bind(leaf.strength(), prefix + ".strength", owner).at(t), 0, 1);
         if (size <= 0 || strength <= 0) {
           continue;
         }
@@ -403,7 +399,7 @@ public final class DensityGenerator {
           if (value > 0 && leaf.noiseStrength() > 0) {
             value *= 1 - leaf.noiseStrength() * noise.at(worldX / noiseScale, worldY / noiseScale, worldZ / noiseScale);
           }
-          density[i] = (float) clamp(value, 0, 1);
+          density[i] = (float) Math.clamp(value, 0, 1);
         }
       }
     }

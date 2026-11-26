@@ -33,5 +33,7 @@ void main() {
     }
     // Sunlit ground is pure white, so the shadow is the only thing visible on it.
     vec3 shadow = vec3(0.56, 0.59, 0.65);
-    fragColor = vec4(mix(shadow, vec3(1.0), sunVisibility(vWorld, uNormal)), 1.0);
+    vec3 lit = mix(shadow, vec3(1.0), sunVisibility(vWorld, uNormal));
+    // The ground darkens softly where the tree stands on it and leans over it.
+    fragColor = vec4(lit * mix(0.55, 1.0, ambientOcclusion(vWorld, uNormal)), 1.0);
 }

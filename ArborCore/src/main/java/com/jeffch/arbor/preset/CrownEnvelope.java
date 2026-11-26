@@ -24,13 +24,25 @@ import com.jeffch.arbor.math.Vec3;
  * A radial crown profile around the vertical line through the trunk base.
  *
  * @param crownBase Height in blocks, before size scale, where the crown starts.
- * @param radius    Crown radius in blocks by normalized height, from the crown base (0) to the tree top (1).
+ * @param radius    Crown radius by normalized height, from the crown base (0) to the tree top (1): in blocks before
+ *                  size scale, or as a share of the tree's height when relative.
+ * @param relative  Whether the radius is a share of the tree's height instead of blocks.
  */
-public record CrownEnvelope(double crownBase, Curve radius) {
+public record CrownEnvelope(double crownBase, Curve radius, boolean relative) {
   /**
    * The crown's center line runs through the middle of the origin block.
    */
   private static final double AXIS = 0.5;
+
+  /**
+   * An envelope whose radius is in blocks.
+   *
+   * @param crownBase Height in blocks, before size scale, where the crown starts.
+   * @param radius    Crown radius in blocks by normalized height.
+   */
+  public CrownEnvelope(double crownBase, Curve radius) {
+    this(crownBase, radius, false);
+  }
 
   /**
    * Horizontal distance from the crown's center line.
@@ -86,7 +98,8 @@ public record CrownEnvelope(double crownBase, Curve radius) {
   }
 
   /**
-   * The crown radius in blocks at height {@code y}, read from the curve by how far up the crown that height is.
+   * The crown radius in blocks at height {@code y}, read from the curve by how far up the crown that height is. A
+   * relative curve is multiplied by the tree's height, which already includes the size scale.
    *
    * @param y          Height in blocks.
    * @param treeHeight Height of the tree.
@@ -96,6 +109,6 @@ public record CrownEnvelope(double crownBase, Curve radius) {
     double base = crownBase * sizeScale;
     double span = treeHeight - base;
     double t = span <= 0 ? 0 : (y - base) / span;
-    return radius.eval(t) * sizeScale;
+    return radius.eval(t) * (relative ? treeHeight : sizeScale);
   }
 }

@@ -19,6 +19,7 @@
 package com.jeffch.arbor.viewer;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.jeffch.arbor.math.Vec3;
 import com.jeffch.arbor.preset.BlockRole;
 import com.jeffch.arbor.preset.LevelPreset;
@@ -37,11 +38,9 @@ import java.awt.event.MouseEvent;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.DoubleConsumer;
-import java.util.function.Function;
+import java.util.function.*;
 
-import static com.jeffch.arbor.viewer.UiParts.row;
+import static com.jeffch.arbor.viewer.UiParts.*;
 
 /**
  * Live editors for every preset setting, split into tree, voxelizer and export tabs. Runs on the Swing thread.
@@ -55,10 +54,41 @@ final class SettingsPanel extends JPanel {
   private static final Color DROP_COLOR = UiParts.ACCENT;
   private static final int DRAG_START_PIXELS = 5;
   private static final int LEAF_INDENT = 22;
+  private static final int ICON_SIZE = 14;
+  /**
+   * An L-shaped line down the left of an open variance pane, so its rows read as part of the setting above.
+   */
+  private static final javax.swing.border.Border BRACKET = new javax.swing.border.AbstractBorder() {
+    @Override
+    public Insets getBorderInsets(Component component) {
+      return new Insets(2, 16, 8, 0);
+    }
+
+    @Override
+    public void paintBorder(Component component, Graphics g, int x, int y, int width, int height) {
+      g.setColor(UiParts.ACCENT);
+      g.fillRect(x + 5, y, 2, height - 4);
+      g.fillRect(x + 5, y + height - 4, 9, 2);
+    }
+  };
   /**
    * Each decorator's title and its key under {@code decorators}, in display order.
    */
   private static final Map<String, String> DECORATORS = new LinkedHashMap<>();
+  private static final String CROWN_RADIUS = "shapeControl.radius";
+  /**
+   * Level settings whose profile runs along the branch itself; the rest run along the parent it grows on.
+   */
+  private static final String ALONG_OWN_BRANCH = "levels\\[\\d+]\\.(shape|noise|path|forces|jink)\\..*";
+  private static final String RELATIVE_RADIUS = "shapeControl.relativeRadius";
+  private static final List<ProfileShape> PROFILE_SHAPES = List.of(
+          new ProfileShape("Flat", "No change anywhere", s -> null),
+          new ProfileShape("Taper", "Full at the base, less toward the tip", s -> new double[][]{{0, 1}, {1, 1 - s}}),
+          new ProfileShape("Grow", "Less at the base, full at the tip", s -> new double[][]{{0, 1 - s}, {1, 1}}),
+          new ProfileShape("Bulge", "Full in the middle, less at both ends",
+                  s -> new double[][]{{0, 1 - s}, {0.5, 1}, {1, 1 - s}}),
+          new ProfileShape("Pinch", "Less in the middle, full at both ends",
+                  s -> new double[][]{{0, 1}, {0.5, 1 - s}, {1, 1}}));
 
   static {
     DECORATORS.put("Pinecones", "pinecones");
@@ -76,7 +106,7 @@ final class SettingsPanel extends JPanel {
   private final Consumer<Boolean> viewChosen;
   private final JLabel status = new JLabel();
   private final JTextArea problem = wrappedText(ERROR_COLOR);
-  private final JTextArea currentTree = wrappedText(KEY_COLOR);
+  private final JTextArea unknownBlocks = wrappedText(WARNING_COLOR);
   private final Body treeBody = new Body();
   private final Body voxelBody = new Body();
   private final JScrollPane treeScroll = new JScrollPane(treeBody);
@@ -86,8 +116,12 @@ final class SettingsPanel extends JPanel {
   private final Set<String> expanded = new HashSet<>();
   private final List<Runnable> refreshers = new ArrayList<>();
   private final List<LevelRow> levelRows = new ArrayList<>();
+  private Consumer<double[][]> profileShown = points -> {
+  };
+  private DoubleSupplier treeSize = () -> 0;
   private boolean simpleView;
   private BlockCatalog catalog;
+
   /**
    * @param document      Preset being edited.
    * @param regenerate    Asks for a new tree after an edit.
@@ -195,12 +229,18 @@ final class SettingsPanel extends JPanel {
   }
 
   /**
-   * A slider beside the spinner; the guard stops the slider's coarser steps rewriting a typed value.
+   * A slider beside the spinner, then three equal slots for the reset, randomness and profile buttons. A slot stays
+   * empty when the setting has no such button, so the number boxes of every row line up. A guard stops the slider's
+   * coarser steps rewriting a typed value.
    *
    * @param spinner Number box the slider follows.
    * @param scale   Maps slider positions to values.
+   * @param random  The dice button, or null for a setting without variance.
+   * @param profile The chart button, or null for a setting without a profile.
+   * @param reset   The reset button, or null to leave its slot empty.
    */
-  private static JPanel withSlider(JSpinner spinner, SliderScale scale) {
+  private static JPanel withSlider(JSpinner spinner, SliderScale scale, JToggleButton random, JToggleButton profile,
+                                   JButton reset) {
     double current = ((Number) spinner.getValue()).doubleValue();
     JSlider slider = new JSlider(0, SliderScale.TICKS, scale.tickOf(current));
     Hashtable<Integer, JLabel> labels = new Hashtable<Integer, JLabel>();
@@ -232,7 +272,17 @@ final class SettingsPanel extends JPanel {
     row.add(slider, BorderLayout.CENTER);
     // Kept at the top so the taller labelled slider does not stretch the number box.
     JPanel spinnerHolder = new JPanel(new BorderLayout());
-    spinnerHolder.add(spinner, BorderLayout.NORTH);
+    // The slots are as wide as an icon button and as tall as the number box.
+    JPanel buttons = new JPanel(new GridLayout(1, 3, 2, 0));
+    for (AbstractButton button : new AbstractButton[]{reset, random, profile}) {
+      buttons.add(button != null ? button : new JPanel());
+    }
+    int slot = small(new JButton(new FlatSVGIcon("icons/dice.svg", ICON_SIZE, ICON_SIZE))).getPreferredSize().width;
+    buttons.setPreferredSize(new Dimension(3 * slot + 4, spinner.getPreferredSize().height));
+    JPanel boxAndButtons = new JPanel(new BorderLayout(2, 0));
+    boxAndButtons.add(spinner, BorderLayout.CENTER);
+    boxAndButtons.add(buttons, BorderLayout.EAST);
+    spinnerHolder.add(boxAndButtons, BorderLayout.NORTH);
     row.add(spinnerHolder, BorderLayout.EAST);
     return row;
   }
@@ -270,18 +320,6 @@ final class SettingsPanel extends JPanel {
   }
 
   /**
-   * Stops a row from growing taller than it needs.
-   *
-   * @param component Row to limit.
-   * @param <T>       Type of the row, returned unchanged.
-   */
-  private static <T extends JComponent> T capped(T component) {
-    component.setAlignmentX(LEFT_ALIGNMENT);
-    component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
-    return component;
-  }
-
-  /**
    * Wrapping read-only text with a little padding.
    *
    * @param color Text color.
@@ -299,6 +337,21 @@ final class SettingsPanel extends JPanel {
    */
   private static double rounded(double value) {
     return Math.round(value * PRECISION) / PRECISION;
+  }
+
+  /**
+   * Enables or disables a control and everything inside it.
+   *
+   * @param component Control to change.
+   * @param enabled   Whether it can be used.
+   */
+  private static void enableAll(Component component, boolean enabled) {
+    component.setEnabled(enabled);
+    if (component instanceof Container container) {
+      for (Component child : container.getComponents()) {
+        enableAll(child, enabled);
+      }
+    }
   }
 
   /**
@@ -327,25 +380,10 @@ final class SettingsPanel extends JPanel {
   void showContext(Context context) {
     boolean first = catalog == null && context.catalog() != null;
     catalog = context.catalog();
-    StringBuilder text = new StringBuilder("This tree:");
-    boolean survival = document.preset().shapes().survival();
-    String prefix = survival ? "survival.blocks." : "blocks.";
-    for (BlockRole role : BlockRole.values()) {
-      String block = context.blocks().block(role);
-      if (block == null && (survival || role == BlockRole.CUT_END)) {
-        continue;
-      }
-      String kind = document.ruleKind(prefix + role.jsonKey());
-      text.append(' ').append(role.jsonKey()).append(' ')
-              .append(block == null ? "off" : kind.equals("solid") ? block : kind).append(';');
-    }
-    text.append("\nPlant layers: ")
-            .append(context.activeLayers().isEmpty() ? "none" : String.join(", ", context.activeLayers()));
-    if (!context.unknownBlocks().isEmpty()) {
-      text.append("\nUnknown blocks: ").append(String.join(", ", context.unknownBlocks()));
-    }
-    currentTree.setText(text.toString());
-    currentTree.setForeground(context.unknownBlocks().isEmpty() ? KEY_COLOR : WARNING_COLOR);
+    // Only a problem is worth the space: the blocks in use are already in the settings below.
+    unknownBlocks.setText(context.unknownBlocks().isEmpty() ? ""
+            : "Unknown blocks: " + String.join(", ", context.unknownBlocks()));
+    unknownBlocks.setVisible(!unknownBlocks.getText().isEmpty());
     if (first) {
       rebuild();
     }
@@ -442,8 +480,9 @@ final class SettingsPanel extends JPanel {
       addSections(treeBody, document.sections(false));
     }
     voxelBody.add(modeSwitch());
-    currentTree.setAlignmentX(LEFT_ALIGNMENT);
-    voxelBody.add(currentTree);
+    unknownBlocks.setAlignmentX(LEFT_ALIGNMENT);
+    unknownBlocks.setVisible(!unknownBlocks.getText().isEmpty());
+    voxelBody.add(unknownBlocks);
     addSections(voxelBody, document.sections(true));
     if (!document.preset().shapes().survival()) {
       JButton addLayer = new JButton("Add plant layer");
@@ -695,15 +734,27 @@ final class SettingsPanel extends JPanel {
         if (section.title().equals("Blocks")) {
           body.add(addBlockTypeButton());
         }
-        if (parent == decoratorBody) {
-          String key = DECORATORS.get(section.title());
-          JButton remove = new JButton("Remove decorator");
-          remove.addActionListener(event -> structuralLater(() -> document.removeDecorator(key)));
-          body.add(row(remove));
-        }
       });
+      if (parent == decoratorBody) {
+        String key = DECORATORS.get(section.title());
+        addClose(fold, "Remove this decorator", () -> document.removeDecorator(key));
+      }
+      if (layer >= 0) {
+        addClose(fold, "Remove this plant layer", () -> document.removeLayer(layer));
+      }
+      if (force >= 0) {
+        addClose(fold, "Remove this force", () -> document.removeForce(force));
+      }
       if (leaf >= 0) {
-        fold.header().setMargin(new Insets(2, LEAF_INDENT, 2, 2));
+        addClose(fold, "Remove these leaves", () -> document.removeLeaves(leaf));
+      }
+      // Only the finest level can go: finer levels and leaves grow on the ones above.
+      if (level > 0 && level == document.levelCount() - 1 && parent == treeBody) {
+        addClose(fold, "Remove this level", document::removeLevel);
+      }
+      if (leaf >= 0) {
+        Insets margin = fold.header().getMargin();
+        fold.header().setMargin(new Insets(margin.top, LEAF_INDENT, margin.bottom, margin.right));
         makeDraggable(fold.header(), leaf);
       }
       if (level >= 0 && parent == treeBody) {
@@ -713,6 +764,22 @@ final class SettingsPanel extends JPanel {
     if (!sections.isEmpty()) {
       parent.add(UiParts.separator());
     }
+  }
+
+  /**
+   * Puts a small × at the right end of a section header that removes the section.
+   *
+   * @param fold   Section to give the button.
+   * @param tip    Tooltip saying what goes.
+   * @param remove Removes it from the preset.
+   */
+  private void addClose(Fold fold, String tip, Runnable remove) {
+    JButton close = small(new JButton("×"));
+    close.putClientProperty("JButton.buttonType", "borderless");
+    close.setToolTipText(tip);
+    close.addActionListener(event -> structuralLater(remove));
+    fold.header().setLayout(new BorderLayout());
+    fold.header().add(close, BorderLayout.EAST);
   }
 
   /**
@@ -791,6 +858,8 @@ final class SettingsPanel extends JPanel {
     JToggleButton header = new JToggleButton((open ? "▾ " : "▸ ") + title, open);
     header.putClientProperty("JButton.buttonType", "borderless");
     header.setHorizontalAlignment(JToggleButton.LEFT);
+    // FlatLaf ignores setFocusPainted on toggle buttons, so the header takes no focus at all.
+    header.setFocusable(false);
     header.setAlignmentX(LEFT_ALIGNMENT);
     header.setMaximumSize(new Dimension(Integer.MAX_VALUE, header.getPreferredSize().height));
     JPanel body = new JPanel();
@@ -830,34 +899,58 @@ final class SettingsPanel extends JPanel {
    */
   private void addFields(JPanel parent, List<SettingField> fields) {
     for (SettingField field : fields) {
+      JButton reset = resetButton(field);
       JComponent control = switch (field.kind()) {
-        case NUMBER, INTEGER -> numberControl(field);
+        case NUMBER, INTEGER -> numberControl(field, reset);
         case BOOLEAN -> booleanControl(field);
         case CHOICE -> choiceControl(field);
         case TEXT -> textControl(field);
         case VECTOR -> vectorControl(field);
         case PARAM -> null;
-        case CURVE -> curveField(field.path(), text -> document.setJsonText(field.path(), text));
+        case CURVE -> field.path().equals(CROWN_RADIUS) ? crownRadiusControl(field.path())
+                : curveField(field.path(), text -> document.setJsonText(field.path(), text));
         case WEIGHTS -> weightsControl(field);
         case BLOCK_RULE -> ruleEditor.control(field.path(), field.key());
         case RANGE -> rangeControl(field);
       };
-      parent.add(nameRow(field));
       if (field.kind() == SettingField.Kind.PARAM) {
-        addParam(parent, field);
+        // The name goes above the slider, which is added first so it can take the reset button.
+        int at = parent.getComponentCount();
+        addParam(parent, field, reset);
+        parent.add(nameRow(field, reset), at);
       } else {
+        parent.add(nameRow(field, reset));
         control.setAlignmentX(LEFT_ALIGNMENT);
         parent.add(capped(control));
+        // The crown settings do nothing until the crown shape style is the envelope.
+        if (field.path().startsWith("shapeControl.") && !field.key().equals("style")) {
+          refreshers.add(() -> enableAll(control, document.preset().shapeControl().enabled()));
+        }
       }
     }
   }
 
   /**
-   * The human name with the JSON key beside it, and a reset button for settings that have a default.
+   * The button that undoes edits to a setting, back to its last saved value. It is enabled only while the setting
+   * differs from the save.
    *
    * @param field The setting.
    */
-  private JPanel nameRow(SettingField field) {
+  private JButton resetButton(SettingField field) {
+    JButton reset = small(new JButton("×"));
+    reset.setToolTipText("Undo changes to this setting (back to the saved value)");
+    reset.addActionListener(event -> structuralLater(() -> document.revertValue(field.path())));
+    return reset;
+  }
+
+  /**
+   * The human name with the JSON key beside it, and the reset button at the end of this row unless the control already
+   * placed it beside its number box. An unwritten setting's name is greyed, as it uses its default.
+   *
+   * @param field The setting.
+   * @param reset The setting's reset button.
+   */
+  private JPanel nameRow(SettingField field, JButton reset) {
     JLabel name = new JLabel(SettingNames.of(field.path()));
     JLabel key = new JLabel("(" + field.key() + ")");
     key.setForeground(KEY_COLOR);
@@ -867,27 +960,24 @@ final class SettingsPanel extends JPanel {
     JPanel row = new JPanel(new BorderLayout());
     row.add(labels, BorderLayout.CENTER);
     Color normal = UIManager.getColor("Label.foreground");
-    if (!field.required()) {
-      JButton reset = new JButton("×");
-      reset.setMargin(new java.awt.Insets(0, 4, 0, 4));
-      reset.setToolTipText("Reset to default");
-      reset.addActionListener(event -> structuralLater(() -> document.clear(field.path())));
+    if (reset.getParent() == null) {
       row.add(reset, BorderLayout.EAST);
-      refreshers.add(() -> {
-        boolean set = document.value(field.path()) != null;
-        reset.setEnabled(set);
-        name.setForeground(set ? normal : KEY_COLOR);
-      });
     }
+    refreshers.add(() -> {
+      reset.setEnabled(document.changed(field.path()));
+      name.setForeground(document.value(field.path()) != null ? normal : KEY_COLOR);
+    });
     return capped(row);
   }
 
   /**
-   * A number field with a slider. An unlimited value shows a button to set a finite one instead.
+   * A number field with a slider and the reset button beside it. An unlimited value shows a button to set a finite one
+   * instead.
    *
    * @param field The setting.
+   * @param reset The setting's reset button.
    */
-  private JComponent numberControl(SettingField field) {
+  private JComponent numberControl(SettingField field, JButton reset) {
     JsonNode node = document.value(field.path());
     double value = node != null ? node.asDouble() : field.fallback() instanceof Double number ? number : 0;
     if (Double.isInfinite(value)) {
@@ -903,7 +993,7 @@ final class SettingsPanel extends JPanel {
               document.setNumber(field.path(), whole ? Math.rint(number) : rounded(number));
               edited();
             });
-    return withSlider(spinner, scale);
+    return withSlider(spinner, scale, null, null, reset);
   }
 
   /**
@@ -914,11 +1004,54 @@ final class SettingsPanel extends JPanel {
   private JComponent booleanControl(SettingField field) {
     JsonNode node = document.value(field.path());
     JCheckBox box = new JCheckBox("Enabled", node != null ? node.asBoolean() : Boolean.TRUE.equals(field.fallback()));
+    box.setName(field.path());
+    if (field.path().equals(RELATIVE_RADIUS)) {
+      // The curve is rewritten in the new unit so the crown keeps its size, and the panel rebuilt to show it.
+      box.addActionListener(event -> {
+        boolean relative = box.isSelected();
+        structuralLater(() -> {
+          convertCrownRadius(relative);
+          document.setBoolean(field.path(), relative);
+        });
+      });
+      return box;
+    }
     box.addActionListener(event -> {
       document.setBoolean(field.path(), box.isSelected());
       edited();
     });
     return box;
+  }
+
+  /**
+   * Rewrites the crown radius curve between blocks and shares of the tree's height, using the current tree: a radius
+   * in blocks is multiplied by the size scale, and a relative one by the tree's height, so dividing by height over size
+   * scale keeps the crown the same. Left alone when no tree has been measured yet.
+   *
+   * @param toRelative Whether the curve becomes relative.
+   */
+  private void convertCrownRadius(boolean toRelative) {
+    double blocksPerShare = treeSize.getAsDouble();
+    if (!(blocksPerShare > 0) || document.preset().shapeControl().relativeRadius() == toRelative) {
+      return;
+    }
+    double[][] points = document.preset().shapeControl().radius().points();
+    double steps = toRelative ? 100 : 10;
+    for (double[] point : points) {
+      double value = toRelative ? point[1] / blocksPerShare : point[1] * blocksPerShare;
+      point[1] = Math.round(value * steps) / steps;
+    }
+    document.setJsonText(CROWN_RADIUS, CrownProfileEditor.json(points));
+  }
+
+  /**
+   * Gives the current tree's height divided by its size scale: how many blocks, before size scale, a relative crown
+   * radius of 1 stands for.
+   *
+   * @param size Supplies the value, or 0 when there is no tree yet.
+   */
+  void onTreeSize(DoubleSupplier size) {
+    treeSize = size;
   }
 
   /**
@@ -994,12 +1127,14 @@ final class SettingsPanel extends JPanel {
   }
 
   /**
-   * A base value, with its variance and profile folded underneath.
+   * A base value, with a dice button for its variance and a chart button for its profile, each opening a pane
+   * underneath.
    *
    * @param parent Panel to add to.
    * @param field  The setting.
+   * @param reset  Reset button to put beside the number box, or null.
    */
-  private void addParam(JPanel parent, SettingField field) {
+  private void addParam(JPanel parent, SettingField field, JButton reset) {
     String path = field.path();
     double fallback = field.fallback() instanceof Double number ? number : 0;
     SliderScale scale = SliderScale.of(path, field.min(), field.max(), false);
@@ -1008,13 +1143,123 @@ final class SettingsPanel extends JPanel {
               document.setParamPart(path, "base", rounded(value));
               edited();
             });
-    parent.add(capped(withSlider(base, scale)));
-    addFold(parent, path + "/more", "Variance and profile", 1, body -> {
-      addVariance(body, path, "treeVariance", "Variance per tree", scale.forVariance());
-      addVariance(body, path, "branchVariance", "Variance per branch", scale.forVariance());
-      body.add(plainName("Profile along parent", "profile"));
-      body.add(capped(curveField(path + ".profile", text -> document.setParamProfile(path, fallback, text))));
+    boolean ownBranch = path.matches(ALONG_OWN_BRANCH);
+    Pane random = pane(parent, path + "/random", "dice", "Randomness: how much this varies per tree and per branch",
+            () -> document.paramPart(path, "treeVariance", 0) != 0 || document.paramPart(path, "branchVariance", 0) != 0,
+            body -> {
+              addVariance(body, path, "treeVariance", "Variance per tree", scale.forVariance());
+              addVariance(body, path, "branchVariance", "Variance per branch", scale.forVariance());
+            });
+    Pane profile = pane(parent, path + "/profile", "chart", ownBranch
+                    ? "Profile: how this changes from the branch's base to its tip"
+                    : "Profile: how this changes with where the branch grows on its parent",
+            () -> document.value(path) != null && document.value(path).has("profile"),
+            body -> addProfile(body, path, fallback, ownBranch));
+    parent.add(capped(withSlider(base, scale, random.button(), profile.button(), reset)));
+    parent.add(random.body());
+    parent.add(profile.body());
+  }
+
+  /**
+   * The profile's name, a one-line hint and its curve, with a fuller explanation on hover.
+   *
+   * @param body      Panel to add to.
+   * @param path      Path of the variable setting.
+   * @param fallback  Base value when the setting is not written.
+   * @param ownBranch Whether the profile runs along the branch itself rather than its parent.
+   */
+  private void addProfile(JPanel body, String path, double fallback, boolean ownBranch) {
+    body.add(plainName(ownBranch ? "Scale along this branch" : "Scale by spot on the parent", "profile"));
+    String explained = (ownBranch
+            ? "Multiplies the value from this branch's base (0) to its tip (1)."
+            : "Multiplies the value by where the branch grows on its parent: 0 at the parent's base, 1 at its tip.")
+            + " For example [[0, 1], [1, 0.5]] halves it toward the tip. Empty: no change.";
+    JLabel hint = new JLabel(ownBranch ? "0 = branch base, 1 = branch tip; empty = none"
+            : "0 = parent base, 1 = parent tip; empty = none");
+    hint.setForeground(KEY_COLOR);
+    hint.setToolTipText(explained);
+    hint.setAlignmentX(LEFT_ALIGNMENT);
+    body.add(hint);
+    JTextField curve = curveField(path + ".profile", text -> document.setParamProfile(path, fallback, text));
+    curve.setToolTipText(explained);
+    // A shape button writes its curve at the slider's strength; moving the slider reshapes the last one picked.
+    JSlider strength = new JSlider(0, 100, 50);
+    strength.setName("strength");
+    strength.setToolTipText("How far the shape dips below ×1");
+    ProfileShape[] picked = {null};
+    Runnable write = () -> {
+      double[][] points = picked[0].points().apply(strength.getValue() / 100.0);
+      String json = points == null ? "" : CrownProfileEditor.json(points);
+      curve.setText(json);
+      document.setParamProfile(path, fallback, json);
+      edited();
+    };
+    JPanel shapes = row();
+    for (ProfileShape shape : PROFILE_SHAPES) {
+      JButton button = small(new JButton(shape.name()));
+      button.setToolTipText(shape.tip());
+      button.addActionListener(event -> {
+        picked[0] = shape;
+        write.run();
+      });
+      shapes.add(button);
+    }
+    strength.addChangeListener(event -> {
+      if (picked[0] != null) {
+        write.run();
+      }
     });
+    body.add(shapes);
+    body.add(capped(row(new JLabel("Strength"), strength)));
+    body.add(capped(curve));
+  }
+
+  /**
+   * An icon toggle that opens a pane of extra controls under a setting. The icon carries a dot while what the pane
+   * edits is set, and the pane remembers being open across redraws.
+   *
+   * @param parent Panel the pane goes in, redrawn when it opens or closes.
+   * @param id     Remembers whether the pane is open; also the toggle's name.
+   * @param icon   Icon file name.
+   * @param tip    Tooltip.
+   * @param set    Whether what the pane edits is set.
+   * @param fill   Builds the pane's rows.
+   */
+  private Pane pane(JPanel parent, String id, String icon, String tip, BooleanSupplier set, Consumer<JPanel> fill) {
+    FlatSVGIcon picture = new FlatSVGIcon("icons/" + icon + ".svg", ICON_SIZE, ICON_SIZE);
+    JToggleButton button = small(new JToggleButton(picture));
+    button.setName(id);
+    button.setToolTipText(tip);
+    button.setSelected(expanded.contains(id));
+    // A set value turns the icon the accent color.
+    Runnable mark = () -> {
+      picture.setColorFilter(set.getAsBoolean() ? new FlatSVGIcon.ColorFilter(color -> UiParts.ACCENT) : null);
+      button.repaint();
+    };
+    mark.run();
+    refreshers.add(mark);
+    JPanel body = new JPanel();
+    body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
+    body.setAlignmentX(LEFT_ALIGNMENT);
+    body.setBorder(BRACKET);
+    if (button.isSelected()) {
+      fill.accept(body);
+    }
+    body.setVisible(button.isSelected());
+    button.addActionListener(event -> {
+      if (button.isSelected()) {
+        expanded.add(id);
+        if (body.getComponentCount() == 0) {
+          fill.accept(body);
+        }
+      } else {
+        expanded.remove(id);
+      }
+      body.setVisible(button.isSelected());
+      parent.revalidate();
+      parent.repaint();
+    });
+    return new Pane(button, body);
   }
 
   /**
@@ -1032,7 +1277,45 @@ final class SettingsPanel extends JPanel {
       document.setParamPart(path, part, rounded(value));
       edited();
     });
-    body.add(capped(withSlider(spinner, scale)));
+    body.add(capped(withSlider(spinner, scale, null, null, null)));
+  }
+
+  /**
+   * Tells the viewer the crown radius points while the crown profile editor is on screen and usable, so it can draw
+   * them around the tree; null when the editor is hidden or disabled.
+   *
+   * @param shown Receives the points, or null.
+   */
+  void onProfileShown(Consumer<double[][]> shown) {
+    profileShown = shown;
+  }
+
+  /**
+   * The crown radius curve as text with the crown's side view below it. Either one updates the other.
+   *
+   * @param path Path of the radius curve.
+   */
+  private JComponent crownRadiusControl(String path) {
+    JTextField text = curveField(path, typed -> document.setJsonText(path, typed));
+    CrownProfileEditor editor = new CrownProfileEditor(document.preset().shapeControl().radius().points(), json -> {
+      text.setText(json);
+      document.setJsonText(path, json);
+      edited();
+    });
+    editor.setRelative(document.preset().shapeControl().relativeRadius());
+    refreshers.add(() -> {
+      editor.setRelative(document.preset().shapeControl().relativeRadius());
+      editor.setPoints(document.preset().shapeControl().radius().points());
+    });
+    editor.onPreview(points -> profileShown.accept(points));
+    JPanel panel = new JPanel();
+    panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+    text.setAlignmentX(LEFT_ALIGNMENT);
+    editor.setAlignmentX(LEFT_ALIGNMENT);
+    panel.add(text);
+    panel.add(Box.createVerticalStrut(4));
+    panel.add(editor);
+    return panel;
   }
 
   /**
@@ -1274,15 +1557,32 @@ final class SettingsPanel extends JPanel {
   }
 
   /**
+   * A ready-made profile.
+   *
+   * @param name   Button text.
+   * @param tip    What it does.
+   * @param points Its curve for a strength from 0 to 1, or null to remove the profile.
+   */
+  private record ProfileShape(String name, String tip, DoubleFunction<double[][]> points) {
+  }
+
+  /**
+   * An icon toggle and the pane it opens under a setting.
+   *
+   * @param button The toggle.
+   * @param body   The pane, built the first time it opens.
+   */
+  private record Pane(JToggleButton button, JPanel body) {
+  }
+
+  /**
    * What the viewer knows about the current tree. The catalog is null without assets, and the unknown blocks are
    * empty without assets.
    *
    * @param catalog       Blocks offered by the editor's pickers, or null without assets.
-   * @param blocks        Block chosen for each role on the current tree.
-   * @param activeLayers  Names of the plant layers active on the current tree.
    * @param unknownBlocks Blocks with no usable model; empty without assets.
    */
-  record Context(BlockCatalog catalog, TreeBlocks blocks, List<String> activeLayers, Set<String> unknownBlocks) {
+  record Context(BlockCatalog catalog, Set<String> unknownBlocks) {
   }
 
   /**

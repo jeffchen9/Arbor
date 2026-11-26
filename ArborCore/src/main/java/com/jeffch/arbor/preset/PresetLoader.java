@@ -334,12 +334,14 @@ public final class PresetLoader {
    * @param json The preset's top level.
    */
   private static ShapeControl shapeControl(Reader json) {
-    ShapeControl settings = new ShapeControl(
-            json.choice("style", STYLES, ShapeControl.Style.NONE),
-            json.number("crownBase", 0, 0, INF),
-            json.curve("radius", Curve.constant(8)),
+    // Read in the order the settings are shown: the relative switch sits above the curve it changes.
+    ShapeControl.Style style = json.choice("style", STYLES, ShapeControl.Style.NONE);
+    double crownBase = json.number("crownBase", 0, 0, INF);
+    boolean relative = json.bool("relativeRadius", false);
+    Curve radius = json.curve("radius", Curve.constant(8));
+    ShapeControl settings = new ShapeControl(style, crownBase, radius,
             json.choice("action", ACTIONS, ShapeControl.Action.STOP),
-            json.number("steer", 0, 0, INF));
+            json.number("steer", 0, 0, INF), relative);
     json.finish();
     return settings;
   }

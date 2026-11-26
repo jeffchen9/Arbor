@@ -117,12 +117,14 @@ final class TexturedRenderer implements AutoCloseable {
    * @param viewProjection Combined view and projection matrix.
    * @param state          View settings, which decide what is visible.
    * @param shadows        Shadow map, or null for Minecraft face shading.
+   * @param occlusion      Occupancy for ambient occlusion, or null for none.
    */
-  void draw(Matrix4f viewProjection, ViewerState state, ShadowMap shadows) {
+  void draw(Matrix4f viewProjection, ViewerState state, ShadowMap shadows, OcclusionVolume occlusion) {
     program.use();
     program.setMatrix("uViewProjection", viewProjection);
     program.setInt("uAtlas", 0);
     ShadowMap.apply(program, shadows);
+    OcclusionVolume.apply(program, occlusion);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, atlasTexture);
     glDisable(GL_CULL_FACE);

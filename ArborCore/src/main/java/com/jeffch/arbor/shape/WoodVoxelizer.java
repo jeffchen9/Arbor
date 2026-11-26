@@ -638,7 +638,7 @@ public final class WoodVoxelizer {
           if (flatBase && raw < 0) {
             continue;
           }
-          double u = Math.max(0, Math.min(1, raw));
+          double u = Math.clamp(raw, 0, 1);
           double dx = cx - abX * u;
           double dy = cy - abY * u;
           double dz = cz - abZ * u;

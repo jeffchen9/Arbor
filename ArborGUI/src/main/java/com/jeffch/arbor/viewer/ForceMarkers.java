@@ -43,6 +43,7 @@ final class ForceMarkers {
   private final Vector3f max;
   private final Vec3 center;
   private final double radius;
+
   /**
    * Starts from the tree's bounds; markers may grow them so the camera frames both.
    *

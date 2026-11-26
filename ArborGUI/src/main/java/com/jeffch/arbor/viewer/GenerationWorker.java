@@ -25,27 +25,29 @@ import com.jeffch.arbor.shape.ShapeClass;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 
 /**
  * Generates and meshes trees off the render thread, keeping only the newest request.
  */
 public final class GenerationWorker implements AutoCloseable {
-  private final TreeBuilder builder;
-  private volatile TexturedMesher texturedMesher;
+  private final BiFunction<SpeciesPreset, Long, GeneratedTree> builder;
   private final Object lock = new Object();
   private final AtomicReference<GenerationResult> ready = new AtomicReference<>();
   private final Thread thread;
+  private volatile TexturedMesher texturedMesher;
   private Request pending;
   private long newestId;
   private boolean closed;
   private boolean running;
+
   /**
    * {@code texturedMesher} may be null, in which case results carry no textured mesh.
    *
    * @param builder        Makes a tree from a preset and seed.
    * @param texturedMesher Builds textured meshes, or null for none.
    */
-  public GenerationWorker(TreeBuilder builder, TexturedMesher texturedMesher) {
+  public GenerationWorker(BiFunction<SpeciesPreset, Long, GeneratedTree> builder, TexturedMesher texturedMesher) {
     this.builder = builder;
     this.texturedMesher = texturedMesher;
     thread = new Thread(this::run, "tree-generation");
@@ -127,7 +129,7 @@ public final class GenerationWorker implements AutoCloseable {
    */
   private GenerationResult generate(Request request) {
     try {
-      GeneratedTree tree = builder.build(request.preset(), request.seed());
+      GeneratedTree tree = builder.apply(request.preset(), request.seed());
       TexturedMesher mesher = texturedMesher;
       TexturedMesher.Result textured = mesher == null ? null : mesher.mesh(tree.shapes(), tree.blocks());
       return new GenerationResult(request.id(), tree, ShapeMesher.mesh(tree.shapes()), textured, null,
@@ -151,14 +153,6 @@ public final class GenerationWorker implements AutoCloseable {
       thread.interrupt();
       lock.notifyAll();
     }
-  }
-
-  /**
-   * Makes a tree from a preset and seed; the real generator in the app, a stand-in in tests.
-   */
-  @FunctionalInterface
-  public interface TreeBuilder {
-    GeneratedTree build(SpeciesPreset preset, long seed);
   }
 
   /**

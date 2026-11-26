@@ -32,6 +32,9 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static com.jeffch.arbor.viewer.UiParts.capped;
+import static com.jeffch.arbor.viewer.UiParts.small;
+
 /**
  * Edits how one block type chooses its block: solid, noise, by height or by branch level.
  */
@@ -45,6 +48,7 @@ final class BlockRuleEditor {
   private final Function<String, JComponent> weights;
   private final Consumer<Runnable> structural;
   private final Runnable edited;
+
   /**
    * @param document   Preset being edited.
    * @param picker     Makes block pickers.
@@ -130,19 +134,6 @@ final class BlockRuleEditor {
   }
 
   /**
-   * A compact button with a tooltip.
-   *
-   * @param text Button text.
-   * @param tip  Tooltip text.
-   */
-  private static JButton small(String text, String tip) {
-    JButton button = new JButton(text);
-    button.setMargin(new Insets(0, 4, 0, 4));
-    button.setToolTipText(tip);
-    return button;
-  }
-
-  /**
    * A control with a label on its left.
    *
    * @param text    Label text.
@@ -153,17 +144,6 @@ final class BlockRuleEditor {
     row.add(new JLabel(text), BorderLayout.WEST);
     row.add(control, BorderLayout.CENTER);
     return capped(row);
-  }
-
-  /**
-   * Stops a row from growing taller than it needs.
-   *
-   * @param component Row to limit.
-   */
-  private static JComponent capped(JComponent component) {
-    component.setAlignmentX(Component.LEFT_ALIGNMENT);
-    component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
-    return component;
   }
 
   /**
@@ -278,7 +258,8 @@ final class BlockRuleEditor {
         right.add(new JLabel("to top"), BorderLayout.WEST);
       }
       if (bands.size() > 1) {
-        JButton remove = small("×", "Remove this band");
+        JButton remove = small(new JButton("×"));
+        remove.setToolTipText("Remove this band");
         remove.addActionListener(event -> structural.accept(() ->
                 document.setBands(path, without(document.bands(path), index))));
         right.add(remove, BorderLayout.EAST);
@@ -311,7 +292,8 @@ final class BlockRuleEditor {
       row.add(picker.of(roleKey, block != null ? block : other, chosen -> structural.accept(() ->
               document.setLevelBlock(path, name, chosen))), BorderLayout.CENTER);
       if (block != null) {
-        JButton clear = small("×", "Use the Other block for this level");
+        JButton clear = small(new JButton("×"));
+        clear.setToolTipText("Use the Other block for this level");
         clear.addActionListener(event -> structural.accept(() -> document.setLevelBlock(path, name, null)));
         row.add(clear, BorderLayout.EAST);
       }

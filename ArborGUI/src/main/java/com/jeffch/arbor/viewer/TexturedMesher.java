@@ -52,6 +52,7 @@ public final class TexturedMesher {
   private final BlockModels models;
   private final TextureAtlas atlas;
   private final TintColors tints;
+
   /**
    * @param models Block models from the assets.
    * @param atlas  Packed block textures.

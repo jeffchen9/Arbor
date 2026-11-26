@@ -109,7 +109,7 @@ public final class SimpleAdjuster {
    */
   private static ShapeControl shapeControl(ShapeControl control, SimpleSettings simple) {
     return new ShapeControl(control.style(), control.crownBase() * simple.height(),
-            control.radius().scaled(simple.crownWidth()), control.action(), control.steer());
+            control.radius().scaled(simple.crownWidth()), control.action(), control.steer(), control.relativeRadius());
   }
 
   /**
@@ -177,7 +177,7 @@ public final class SimpleAdjuster {
    */
   private static OrientationSettings orientation(OrientationSettings orientation, double degrees) {
     Param angle = orientation.startAngle();
-    double base = Math.max(0, Math.min(1, angle.base() + degrees / DEGREES_PER_START_ANGLE));
+    double base = Math.clamp(angle.base() + degrees / DEGREES_PER_START_ANGLE, 0, 1);
     return new OrientationSettings(new Param(base, angle.treeVariance(), angle.branchVariance(), angle.profile()),
             orientation.startRoll(), orientation.alignment());
   }

@@ -24,12 +24,13 @@
     <parent>
         <groupId>com.jeffch.arbor</groupId>
         <artifactId>Arbor</artifactId>
-        <version>1.0.0-SNAPSHOT-1</version>
+        <version>1.0.0-SNAPSHOT-2</version>
     </parent>
 
     <artifactId>ArborGUI</artifactId>
     <name>ArborGUI</name>
-    <description>The live editor and viewer, and the command line, packaged as the runnable Arbor-(version).jar.</description>
+    <description>The live editor and viewer, and the command line, packaged as the runnable Arbor-(version).jar.
+    </description>
 
     <dependencies>
         <dependency>
@@ -146,6 +147,10 @@
         <dependency>
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

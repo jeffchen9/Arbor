@@ -64,6 +64,30 @@ final class UiParts {
   }
 
   /**
+   * Stops a row from growing taller than it needs.
+   *
+   * @param component Row to limit.
+   * @param <T>       Type of the row, returned unchanged.
+   */
+  static <T extends JComponent> T capped(T component) {
+    component.setAlignmentX(Component.LEFT_ALIGNMENT);
+    component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
+    return component;
+  }
+
+  /**
+   * Gives a small button, such as × beside a row, one look: tight margin, no focus ring.
+   *
+   * @param button Button to style.
+   * @param <T>    Type of the button, returned unchanged.
+   */
+  static <T extends AbstractButton> T small(T button) {
+    button.setMargin(new Insets(0, 4, 0, 4));
+    button.setFocusable(false);
+    return button;
+  }
+
+  /**
    * A one-pixel horizontal line that spans its column.
    */
   static JComponent separator() {

@@ -38,14 +38,14 @@ final class ExportControls extends JPanel implements AutoCloseable {
   private static final int PROGRESS_MILLIS = 150;
 
   private final PresetDocument document;
-  private final JSpinner count = new JSpinner(new SpinnerNumberModel(10, 1, MAX_COUNT, 10));
+  private final JSpinner count = new JSpinner(new SpinnerNumberModel(10, 1, MAX_COUNT, 5));
   private final JTextField folder = new JTextField();
   private final JTextField name = new JTextField();
   private final JButton browse = new JButton("Browse...");
   private final JButton export = new JButton("Export");
   private final JButton cancel = new JButton("Cancel");
   private final JProgressBar progress = new JProgressBar();
-  private final JTextArea result = new JTextArea();
+  private final JTextArea result = UiParts.textBlock(null);
   private final Timer timer = new Timer(PROGRESS_MILLIS, event -> refresh());
   private boolean filling;
   private boolean customFolder;
@@ -86,10 +86,7 @@ final class ExportControls extends JPanel implements AutoCloseable {
     add(Box.createVerticalGlue());
     progress.setStringPainted(true);
     progress.setMaximumSize(new Dimension(Integer.MAX_VALUE, progress.getPreferredSize().height));
-    result.setEditable(false);
-    result.setLineWrap(true);
-    result.setWrapStyleWord(true);
-    result.setOpaque(false);
+    result.setFocusable(false);
     onTyped(folder, () -> customFolder = true);
     onTyped(name, () -> customName = true);
     browse.addActionListener(event -> chooseFolder());

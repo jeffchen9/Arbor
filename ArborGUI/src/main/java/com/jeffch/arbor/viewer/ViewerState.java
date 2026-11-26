@@ -40,6 +40,7 @@ public final class ViewerState {
   public boolean branchView;
   public boolean useTextures = true;
   public boolean showForces = true;
+  public boolean showEnvelope;
   public boolean realisticLighting;
   public boolean splitView;
   public float densityThreshold = 0.05f;

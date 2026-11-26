@@ -28,6 +28,8 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.function.Consumer;
 
+import static com.jeffch.arbor.viewer.UiParts.capped;
+
 /**
  * The Simple view of the Tree tab: a starting tree and ten whole-tree sliders.
  */
@@ -49,6 +51,7 @@ final class SimpleTreePanel extends JPanel {
   private final Runnable edited;
   private final List<JSlider> sliders = new ArrayList<>();
   private boolean resetting;
+
   /**
    * @param document  Preset being edited.
    * @param edited    Told after a slider changes the preset.
@@ -108,17 +111,6 @@ final class SimpleTreePanel extends JPanel {
     }
     int travel = (int) Math.rint((value - center) / (end - center) * HALF_TRAVEL);
     return value < center ? -travel : travel;
-  }
-
-  /**
-   * Stops a row from growing taller than it needs.
-   *
-   * @param component Row to limit.
-   */
-  private static JComponent capped(JComponent component) {
-    component.setAlignmentX(Component.LEFT_ALIGNMENT);
-    component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
-    return component;
   }
 
   /**

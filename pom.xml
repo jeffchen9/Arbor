@@ -23,7 +23,7 @@
 
     <groupId>com.jeffch.arbor</groupId>
     <artifactId>Arbor</artifactId>
-    <version>1.0.0-SNAPSHOT-1</version>
+    <version>1.0.0-SNAPSHOT-2</version>
     <packaging>pom</packaging>
     <name>Arbor</name>
 
@@ -70,6 +70,11 @@
             <dependency>
                 <groupId>com.formdev</groupId>
                 <artifactId>flatlaf</artifactId>
+                <version>3.5.4</version>
+            </dependency>
+            <dependency>
+                <groupId>com.formdev</groupId>
+                <artifactId>flatlaf-extras</artifactId>
                 <version>3.5.4</version>
             </dependency>
             <dependency>

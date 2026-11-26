@@ -21,6 +21,37 @@ uniform vec3 uSunDirection;
 uniform mat4 uLightMatrix;
 uniform sampler2DShadow uShadowMap;
 uniform int uTranslucent;
+uniform sampler3D uOcclusion;
+uniform int uAmbientOcclusion;
+uniform vec3 uOcclusionMin;
+uniform vec3 uOcclusionSize;
+
+// How much of the block around a point the tree fills, from 0 to 1, blended between neighbouring blocks.
+float occupancy(vec3 world) {
+    return texture(uOcclusion, (world - uOcclusionMin) / uOcclusionSize).r;
+}
+
+// Ambient occlusion: how open a point is to the sky, from 0.3 when buried in the crown to 1 in the open, judged from
+// the blocks in three rings off its surface, nearer ones counting more. A zero normal, a crossed plant, looks upward.
+float ambientOcclusion(vec3 world, vec3 normal) {
+    if (uAmbientOcclusion != 1) {
+        return 1.0;
+    }
+    vec3 n = dot(normal, normal) < 0.0001 ? vec3(0.0, 1.0, 0.0) : normal;
+    vec3 t = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 b = cross(n, t);
+    float blocked = 0.0;
+    float total = 0.0;
+    for (int ring = 0; ring < 3; ring++) {
+        float distance = 0.75 + float(ring) * 1.1;
+        float weight = 1.0 / (1.0 + float(ring));
+        vec3 center = world + n * distance;
+        blocked += weight * (2.0 * occupancy(center) + occupancy(center + t * distance)
+                + occupancy(center - t * distance) + occupancy(center + b * distance) + occupancy(center - b * distance));
+        total += weight * 6.0;
+    }
+    return 1.0 - 0.7 * smoothstep(0.0, 0.6, blocked / total);
+}
 
 // Minecraft's fixed face brightness: top 1.0, north and south 0.8, east and west 0.6, bottom 0.5.
 float faceBrightness(vec3 n) {
@@ -45,12 +76,14 @@ float sunVisibility(vec3 world, vec3 offsetDirection) {
     return total / 25.0;
 }
 
-// Sky light plus shadowed sun. A zero normal is a crossed plant, which is lit from both sides.
+// Sky light, darkened where the tree closes in, plus shadowed sun. A zero normal is a crossed plant, which is lit from
+// both sides.
 float realisticBrightness(vec3 world, vec3 normal) {
+    float ambient = ambientOcclusion(world, normal);
     if (dot(normal, normal) < 0.0001) {
-        return 0.5 + 0.62 * sunVisibility(world, uSunDirection);
+        return 0.5 * ambient + 0.62 * sunVisibility(world, uSunDirection);
     }
-    float sky = 0.34 + 0.2 * (normal.y * 0.5 + 0.5);
+    float sky = (0.34 + 0.2 * (normal.y * 0.5 + 0.5)) * ambient;
     float facing = max(dot(normal, uSunDirection), 0.0);
     return sky + (facing > 0.0 ? 0.82 * facing * sunVisibility(world, normal) : 0.0);
 }

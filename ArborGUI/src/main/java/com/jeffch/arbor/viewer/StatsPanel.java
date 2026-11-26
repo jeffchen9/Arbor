@@ -97,7 +97,9 @@ final class StatsPanel extends JPanel {
   static Map<String, String> rowsFor(ControlPanel.Stats stats) {
     Map<String, String> values = new LinkedHashMap<>();
     int[] size = stats.dimensions();
-    values.put("Size", size[0] + " × " + size[1] + " × " + size[2]);
+    // Each number in the color of its axis at the origin.
+    values.put("Size", "<html><font color=#f24d4d>" + size[0] + " wide</font> × <font color=#4df266>" + size[1]
+            + " tall</font> × <font color=#598cff>" + size[2] + " deep</font></html>");
     values.put("Blocks", String.format("%,d", stats.counts().values().stream().mapToInt(Integer::intValue).sum()));
     values.put("Ground", stats.slopeDegrees() == 0 ? "Flat" : String.format("%.1f°", stats.slopeDegrees()));
     SHAPE_LABELS.forEach((shape, label) ->
@@ -150,7 +152,11 @@ final class StatsPanel extends JPanel {
     int index = 0;
     for (Map.Entry<String, String> entry : values.entrySet()) {
       index++;
-      String tip = entry.getKey().equals("Renderer") ? stats.renderer() : entry.getValue();
+      String tip = switch (entry.getKey()) {
+        case "Renderer" -> stats.renderer();
+        case "Size" -> "Blocks along x (red axis), y (green, up) and z (blue)";
+        default -> entry.getValue();
+      };
       boolean main = index <= MAIN_ROWS;
       (main ? rows : details).add(row(entry.getKey(), entry.getValue(), tip,
               main ? index < MAIN_ROWS : index < values.size()));

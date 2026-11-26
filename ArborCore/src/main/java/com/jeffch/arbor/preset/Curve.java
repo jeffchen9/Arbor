@@ -106,6 +106,17 @@ public final class Curve {
   }
 
   /**
+   * The control points as [t, value] pairs, in order.
+   */
+  public double[][] points() {
+    double[][] points = new double[ts.length][];
+    for (int i = 0; i < ts.length; i++) {
+      points[i] = new double[]{ts[i], values[i]};
+    }
+    return points;
+  }
+
+  /**
    * Largest value at any control point.
    */
   public double max() {

@@ -37,6 +37,7 @@ final class SettingNames {
           tree.slopeRecovery=Trunk slope recovery
           shapeControl.style=Crown shape style
           shapeControl.crownBase=Crown base height
+          shapeControl.relativeRadius=Radius as share of tree height
           shapeControl.radius=Crown radius by height
           shapeControl.action=At the crown edge
           shapeControl.steer=Steer along crown edge

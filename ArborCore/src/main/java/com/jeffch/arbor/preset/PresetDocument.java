@@ -60,6 +60,7 @@ public final class PresetDocument {
   private String error;
   private boolean diskError;
   private boolean changedOnDisk;
+
   private PresetDocument(Path file) {
     this.file = file;
   }
@@ -1384,6 +1385,22 @@ public final class PresetDocument {
   }
 
   /**
+   * Removes one leaf generator. An index out of range does nothing.
+   *
+   * @param index Position of the leaf generator.
+   */
+  public void removeLeaves(int index) {
+    if (!(root.get("leaves") instanceof ArrayNode leaves) || index < 0 || index >= leaves.size()) {
+      return;
+    }
+    leaves.remove(index);
+    if (leaves.isEmpty()) {
+      root.remove("leaves");
+    }
+    validate();
+  }
+
+  /**
    * Moves a layer up (negative) or down. A move past either end does nothing.
    *
    * @param index Position of the layer.
@@ -1406,7 +1423,40 @@ public final class PresetDocument {
    * @param path Setting path.
    */
   public JsonNode value(String path) {
-    JsonNode node = root;
+    return valueIn(root, path);
+  }
+
+  /**
+   * Whether a setting differs from the last saved version.
+   *
+   * @param path Setting path.
+   */
+  public boolean changed(String path) {
+    return !Objects.equals(value(path), valueIn(savedRoot, path));
+  }
+
+  /**
+   * Puts a setting back to its last saved value, or removes it when the save did not have it.
+   *
+   * @param path Setting path.
+   */
+  public void revertValue(String path) {
+    JsonNode saved = valueIn(savedRoot, path);
+    if (saved == null) {
+      clear(path);
+    } else {
+      put(path, saved.deepCopy());
+    }
+  }
+
+  /**
+   * A value inside a JSON tree, or null when it or anything on the way to it is missing.
+   *
+   * @param top  Top of the tree.
+   * @param path Setting path.
+   */
+  private JsonNode valueIn(JsonNode top, String path) {
+    JsonNode node = top;
     for (Object key : keys(path)) {
       node = key instanceof Integer index ? node.get(index) : node.get((String) key);
       if (node == null || node.isNull()) {

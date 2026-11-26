@@ -117,7 +117,7 @@ public final class BranchSampler {
     for (int i = 1; i < nodes.size() - 1; i++) {
       Vec3 before = nodes.get(i).position().sub(nodes.get(i - 1).position()).normalized();
       Vec3 after = nodes.get(i + 1).position().sub(nodes.get(i).position()).normalized();
-      double cosine = Math.max(-1, Math.min(1, before.dot(after)));
+      double cosine = Math.clamp(before.dot(after), -1, 1);
       bends.add(new Bend(length <= 0 ? 0 : arc[i] / length, StrictMath.toDegrees(StrictMath.acos(cosine))));
     }
     return bends;
@@ -136,7 +136,7 @@ public final class BranchSampler {
     if (arc.length < 2) {
       return 0;
     }
-    double target = Math.max(0, Math.min(1, t)) * length;
+    double target = Math.clamp(t, 0, 1) * length;
     int index = Arrays.binarySearch(arc, target);
     // A miss returns minus the insertion point minus one; the node before that point starts the segment.
     int lower = index >= 0 ? index : -index - 2;
@@ -157,7 +157,7 @@ public final class BranchSampler {
     if (span <= 0) {
       return 0;
     }
-    double target = Math.max(0, Math.min(1, t)) * length;
-    return Math.max(0, Math.min(1, (target - arc[segment]) / span));
+    double target = Math.clamp(t, 0, 1) * length;
+    return Math.clamp((target - arc[segment]) / span, 0, 1);
   }
 }

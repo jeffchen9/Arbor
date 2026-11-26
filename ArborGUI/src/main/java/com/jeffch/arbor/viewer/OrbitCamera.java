@@ -33,21 +33,13 @@ public final class OrbitCamera {
   private static final float ORBIT_DEGREES_PER_PIXEL = 0.3f;
   private static final float ZOOM_FACTOR = 0.9f;
 
-  private final Vector3f target = new Vector3f(0.5f, 10, 0.5f);
-  private float yaw = 35;
-  private float pitch = 18;
-  private float distance = 60;
+  private static final float START_YAW = 35;
+  private static final float START_PITCH = 18;
 
-  /**
-   * The value limited to a range.
-   *
-   * @param value Value to limit.
-   * @param min   Lowest allowed.
-   * @param max   Highest allowed.
-   */
-  private static float clamp(float value, float min, float max) {
-    return Math.max(min, Math.min(max, value));
-  }
+  private final Vector3f target = new Vector3f(0.5f, 10, 0.5f);
+  private float yaw = START_YAW;
+  private float pitch = START_PITCH;
+  private float distance = 60;
 
   /**
    * Turns around the target by a mouse drag, keeping the pitch short of straight up or down.
@@ -57,7 +49,7 @@ public final class OrbitCamera {
    */
   public void orbit(double deltaX, double deltaY) {
     yaw -= (float) deltaX * ORBIT_DEGREES_PER_PIXEL;
-    pitch = clamp(pitch + (float) deltaY * ORBIT_DEGREES_PER_PIXEL, -MAX_PITCH, MAX_PITCH);
+    pitch = Math.clamp(pitch + (float) deltaY * ORBIT_DEGREES_PER_PIXEL, -MAX_PITCH, MAX_PITCH);
   }
 
   /**
@@ -82,19 +74,21 @@ public final class OrbitCamera {
    * @param ticks Wheel ticks; positive moves closer.
    */
   public void zoom(double ticks) {
-    distance = clamp(distance * (float) Math.pow(ZOOM_FACTOR, ticks), MIN_DISTANCE, MAX_DISTANCE);
+    distance = Math.clamp(distance * (float) Math.pow(ZOOM_FACTOR, ticks), MIN_DISTANCE, MAX_DISTANCE);
   }
 
   /**
-   * Centers the camera so the given bounds fit in view.
+   * Centers the camera so the given bounds fit in view, from the starting angle.
    *
    * @param min Lower corner of the bounds.
    * @param max Upper corner of the bounds.
    */
   public void frame(Vector3f min, Vector3f max) {
+    yaw = START_YAW;
+    pitch = START_PITCH;
     target.set(min).add(max).mul(0.5f);
     float radius = new Vector3f(max).sub(min).length() / 2;
-    distance = clamp(radius / (float) Math.sin(FOV_RADIANS / 2) * 1.05f, MIN_DISTANCE, MAX_DISTANCE);
+    distance = Math.clamp(radius / (float) Math.sin(FOV_RADIANS / 2) * 1.05f, MIN_DISTANCE, MAX_DISTANCE);
   }
 
   /**

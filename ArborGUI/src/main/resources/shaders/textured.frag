@@ -46,7 +46,8 @@ void main() {
     if (uRealistic == 1) {
         shade = realisticBrightness(vWorld, normal);
     } else {
-        shade = dot(normal, normal) > 0.0 ? faceBrightness(normal) : 1.0;
+        // Minecraft's face shading, darkened where the tree closes in.
+        shade = (dot(normal, normal) > 0.0 ? faceBrightness(normal) : 1.0) * ambientOcclusion(vWorld, normal);
     }
     vec3 albedo = texel.rgb * vTint;
     fragColor = vec4(min(albedo * (shade + transmittedLight(vWorld, normal)), vec3(1.0)), 1.0);

@@ -29,6 +29,7 @@ out vec4 fragColor;
 
 void main() {
     vec3 normal = normalize(vNormal);
-    float shade = uRealistic == 1 ? realisticBrightness(vWorld, normal) : faceBrightness(normal);
+    float shade = uRealistic == 1 ? realisticBrightness(vWorld, normal)
+            : faceBrightness(normal) * ambientOcclusion(vWorld, normal);
     fragColor = vec4(min(uColor * (shade + transmittedLight(vWorld, normal)), vec3(1.0)), 1.0);
 }

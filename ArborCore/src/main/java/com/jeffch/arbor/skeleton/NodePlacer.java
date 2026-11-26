@@ -320,7 +320,7 @@ public final class NodePlacer {
       if (settings.clip() && (t < settings.first() - EPSILON || t > settings.last() + EPSILON)) {
         continue;
       }
-      t = Math.max(0, Math.min(1, t));
+      t = Math.clamp(t, 0, 1);
       if (settings.pruning().eval(t) < 0.5) {
         continue;
       }

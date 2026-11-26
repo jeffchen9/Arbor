@@ -42,14 +42,19 @@ final class ControlPanel extends JPanel implements Scrollable {
   private final Consumer<Consumer<ViewerState>> view;
   private final LongConsumer seedChanged;
   private final JTextField seedField = new JTextField(12);
-  private final JLabel source = new JLabel();
+  /**
+   * The camera reset and camera help, shown over the top left of the view.
+   */
+  private final JPanel viewControls = new JPanel();
   private final JTextArea notice = readout(UiParts.WARNING);
   private final JTextArea forces = readout(UiParts.INFO);
   private final StatsPanel statsPanel = new StatsPanel();
   private final List<JComponent> voxelControls = new ArrayList<>();
   private long seed;
+
   /**
-   * Builds the seed controls, the camera reset, and the View, Show and Leaf density sections.
+   * Builds the seed controls, the View, Show and Leaf density sections, and the camera controls that the view shows
+   * over its top left.
    *
    * @param state       Starting view settings.
    * @param view        Applies a change to the view settings on the render thread.
@@ -62,15 +67,23 @@ final class ControlPanel extends JPanel implements Scrollable {
     seed = state.seed;
     setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
     setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-    add(source);
+    viewControls.setLayout(new BoxLayout(viewControls, BoxLayout.Y_AXIS));
+    // No backdrop: the camera controls sit straight on the view.
+    viewControls.setOpaque(false);
     addSeed();
     JButton reset = new JButton("Reset camera");
     reset.addActionListener(event -> resetCamera.run());
-    add(row(reset));
-    JTextArea help = UiParts.textBlock(UiParts.MUTED);
-    help.setText(ViewPanel.CAMERA_HELP);
+    // Outline only, so the view shows through the button.
+    reset.setBackground(new Color(0, 0, 0, 0));
+    // FlatLaf ignores setFocusPainted, so the button takes no focus and shows no blue outline after a click.
+    reset.setFocusable(false);
+    reset.setAlignmentX(Component.LEFT_ALIGNMENT);
+    viewControls.add(reset);
+    JLabel help = new JLabel(ViewPanel.CAMERA_HELP);
+    help.setForeground(UiParts.MUTED);
+    help.setBorder(BorderFactory.createEmptyBorder(4, 0, 0, 0));
     help.setAlignmentX(Component.LEFT_ALIGNMENT);
-    add(help);
+    viewControls.add(help);
 
     section("View");
     JRadioButton voxels = new JRadioButton("Voxels", !state.branchView);
@@ -105,6 +118,7 @@ final class ControlPanel extends JPanel implements Scrollable {
     add(toggle("Leaf density", state.showDensity, (viewer, on) -> viewer.showDensity = on));
     add(toggle("Sun and wind", state.showForces, (viewer, on) -> viewer.showForces = on));
     add(forces);
+    add(toggle("Crown envelope", state.showEnvelope, (viewer, on) -> viewer.showEnvelope = on));
 
     section("Leaf density");
     addSlider("Threshold", 0, 0.95f, state.densityThreshold, (viewer, value) -> viewer.densityThreshold = value);
@@ -113,37 +127,6 @@ final class ControlPanel extends JPanel implements Scrollable {
     statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
     add(statsPanel);
     setBranchView(state.branchView);
-  }
-
-  @Override
-  public Dimension getPreferredScrollableViewportSize() {
-    return getPreferredSize();
-  }
-
-  @Override
-  public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
-    return SCROLL_UNIT;
-  }
-
-  @Override
-  public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
-    return visible.height;
-  }
-
-  /**
-   * Fills the column's width, so text wraps to it.
-   */
-  @Override
-  public boolean getScrollableTracksViewportWidth() {
-    return true;
-  }
-
-  /**
-   * Keeps its own height, so each section sits right below the one above instead of spreading out to fill the column.
-   */
-  @Override
-  public boolean getScrollableTracksViewportHeight() {
-    return false;
   }
 
   /**
@@ -183,6 +166,37 @@ final class ControlPanel extends JPanel implements Scrollable {
     area.setVisible(visible);
   }
 
+  @Override
+  public Dimension getPreferredScrollableViewportSize() {
+    return getPreferredSize();
+  }
+
+  @Override
+  public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+    return SCROLL_UNIT;
+  }
+
+  @Override
+  public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+    return visible.height;
+  }
+
+  /**
+   * Fills the column's width, so text wraps to it.
+   */
+  @Override
+  public boolean getScrollableTracksViewportWidth() {
+    return true;
+  }
+
+  /**
+   * Keeps its own height, so each section sits right below the one above instead of spreading out to fill the column.
+   */
+  @Override
+  public boolean getScrollableTracksViewportHeight() {
+    return false;
+  }
+
   /**
    * The seed field with Previous, Next and Random buttons.
    */
@@ -204,6 +218,13 @@ final class ControlPanel extends JPanel implements Scrollable {
     next.addActionListener(event -> setSeed(seed + 1));
     random.addActionListener(event -> randomSeed());
     add(row(previous, next, random));
+  }
+
+  /**
+   * The camera reset and camera help, for the view to show over its top left.
+   */
+  JComponent viewControls() {
+    return viewControls;
   }
 
   /**
@@ -314,21 +335,11 @@ final class ControlPanel extends JPanel implements Scrollable {
   }
 
   /**
-   * Shows which preset is open.
-   *
-   * @param name Preset name.
-   */
-  void showSource(String name) {
-    source.setText(name);
-  }
-
-  /**
    * Updates the readouts for the current tree.
    *
    * @param stats The current tree's numbers.
    */
   void showStats(Stats stats) {
-    source.setText(stats.source());
     show(notice, stats.textureNotice());
     show(forces, stats.forces().isEmpty() ? "No sun or wind on this tree" : stats.forces());
     statsPanel.show(stats);

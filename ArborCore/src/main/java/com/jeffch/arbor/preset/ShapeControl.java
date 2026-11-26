@@ -21,19 +21,21 @@ package com.jeffch.arbor.preset;
 /**
  * Limits branches to a crown shape.
  *
- * @param style     Whether a crown envelope is used.
- * @param crownBase Height in blocks, before size scale, where the crown starts.
- * @param radius    Crown radius in blocks by normalized height, from the crown base (0) to the tree top (1).
- * @param action    What happens at the boundary: cut the branch, or shorten it to fit before it grows.
- * @param steer     How strongly branches near the boundary turn along it instead of outward.
+ * @param style          Whether a crown envelope is used.
+ * @param crownBase      Height in blocks, before size scale, where the crown starts.
+ * @param radius         Crown radius in blocks by normalized height, from the crown base (0) to the tree top (1).
+ * @param action         What happens at the boundary: cut the branch, or shorten it to fit before it grows.
+ * @param steer          How strongly branches near the boundary turn along it instead of outward.
+ * @param relativeRadius Whether the radius is a share of the tree's height instead of blocks.
  */
-public record ShapeControl(Style style, double crownBase, Curve radius, Action action, double steer) {
+public record ShapeControl(Style style, double crownBase, Curve radius, Action action, double steer,
+                           boolean relativeRadius) {
   public boolean enabled() {
     return style == Style.ENVELOPE;
   }
 
   public CrownEnvelope envelope() {
-    return new CrownEnvelope(crownBase, radius);
+    return new CrownEnvelope(crownBase, radius, relativeRadius);
   }
 
   /**

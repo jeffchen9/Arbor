@@ -38,7 +38,7 @@ public final class GenerationBudget {
    * should stop.
    *
    * @param units Amount of work.
-   * @throws CancelledException When the thread was interrupted.
+   * @throws CancelledException       When the thread was interrupted.
    * @throws GenerationLimitException When the work would exceed {@link #MAX_WORK}.
    */
   public void charge(double units) {

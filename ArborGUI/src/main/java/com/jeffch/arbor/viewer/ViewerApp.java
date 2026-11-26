@@ -21,10 +21,7 @@ package com.jeffch.arbor.viewer;
 import com.jeffch.arbor.math.Vec3;
 import com.jeffch.arbor.pipeline.GeneratedTree;
 import com.jeffch.arbor.pipeline.TreeGenerator;
-import com.jeffch.arbor.preset.GroundPlane;
-import com.jeffch.arbor.preset.PresetDocument;
-import com.jeffch.arbor.preset.PresetLoader;
-import com.jeffch.arbor.preset.SpeciesPreset;
+import com.jeffch.arbor.preset.*;
 import com.jeffch.arbor.shape.ShapeClass;
 import com.jeffch.arbor.skeleton.Branch;
 import com.jeffch.arbor.skeleton.Node;
@@ -47,10 +44,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -70,6 +65,14 @@ public final class ViewerApp {
   private static final int GL_FAILURE = 3;
   private static final long COMMAND_WAIT_MILLIS = 8;
   private static final int SPLIT_DIVIDER = 2;
+  /**
+   * The settings pane's starting width: enough for the Tree, Voxelizer, Decorators and Export tabs in one row.
+   */
+  private static final int SETTINGS_WIDTH = 540;
+  /**
+   * The origin axes' length as a share of the camera's distance from the origin.
+   */
+  private static final float AXIS_SCREEN_SIZE = 0.06f;
   private static final float[][] LEVEL_COLORS = {
           {0.92f, 0.72f, 0.42f}, {0.95f, 0.52f, 0.34f}, {0.48f, 0.82f, 0.56f}, {0.46f, 0.72f, 0.95f},
           {0.78f, 0.60f, 0.95f},
@@ -85,6 +88,7 @@ public final class ViewerApp {
   private final JPanel settingsHolder = new JPanel(new BorderLayout());
   private JFrame frame;
   private ViewPanel viewPanel;
+  private List<ViewPanel.Legend> levelLegend = List.of();
   private ControlPanel panel;
   private PresetFiles files;
   private volatile SettingsPanel settingsPanel;
@@ -98,12 +102,25 @@ public final class ViewerApp {
   private long window;
   private OffscreenTarget target;
   private LineRenderer sceneLines;
+  private LineRenderer axisLines;
+  private LineRenderer envelopeLines;
+  /**
+   * The crown radius points while the settings show the crown profile editor, or null.
+   */
+  private double[][] editingProfile;
+  /**
+   * The current tree's height over its size scale, for converting the crown radius between blocks and shares of the
+   * height. Written on the render thread, read by the settings.
+   */
+  private volatile double treeSize;
   private LineRenderer skeletonLines;
   private LineRenderer voxelLines;
   private LineRenderer forceLines;
   private GroundRenderer groundRenderer;
   private ShadowMap shadowMap;
   private boolean shadowStale = true;
+  private OcclusionVolume occlusion;
+  private boolean occlusionStale = true;
   private ForceMarkers.Markers forceMarkers;
   private MeshRenderer meshes;
   private TexturedRenderer texturedRenderer;
@@ -216,6 +233,25 @@ public final class ViewerApp {
   }
 
   /**
+   * Where a game jar usually is on this system, as an example for the user.
+   */
+  private static String exampleJar() {
+    Path versions = MinecraftAssets.versionsFolder();
+    Path example = Path.of("1.21.4", "1.21.4.jar");
+    return (versions == null ? Path.of("versions").resolve(example) : versions.resolve(example)).toString();
+  }
+
+  /**
+   * A dialog message that wraps at a readable width, with blank lines kept as paragraph breaks.
+   *
+   * @param message Plain text, with {@code \n} for line breaks.
+   */
+  private static JLabel dialogText(String message) {
+    String html = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
+    return new JLabel("<html><body style='width: 380px'>" + html + "</body></html>");
+  }
+
+  /**
    * Creates a hidden OpenGL 3.3 context and every renderer, loads the Minecraft assets if found, and shows the first
    * tree. All drawing happens off screen; the window only shows the finished image.
    */
@@ -245,12 +281,21 @@ public final class ViewerApp {
     rendererName = glGetString(GL_RENDERER);
     target = new OffscreenTarget();
     sceneLines = new LineRenderer();
+    axisLines = new LineRenderer();
+    LineRenderer.Lines axes = new LineRenderer.Lines();
+    // Lifted a little so they do not flicker against the grid lines through the origin.
+    axes.add(0, 0.003f, 0, 1, 0.003f, 0, 0.95f, 0.3f, 0.3f);
+    axes.add(0, 0, 0, 0, 1, 0, 0.3f, 0.95f, 0.4f);
+    axes.add(0, 0.003f, 0, 0, 0.003f, 1, 0.35f, 0.55f, 1f);
+    axisLines.upload(axes);
     skeletonLines = new LineRenderer();
     voxelLines = new LineRenderer();
     forceLines = new LineRenderer();
+    envelopeLines = new LineRenderer();
     groundRenderer = new GroundRenderer();
     meshes = new MeshRenderer();
     density = new DensityRenderer();
+    occlusion = new OcclusionVolume();
     TexturedMesher.Result firstTextured = loadAssets();
     uploadTree(ShapeMesher.mesh(tree.shapes()), firstTextured);
     frameTree();
@@ -347,25 +392,6 @@ public final class ViewerApp {
   }
 
   /**
-   * Where a game jar usually is on this system, as an example for the user.
-   */
-  private static String exampleJar() {
-    Path versions = MinecraftAssets.versionsFolder();
-    Path example = Path.of("1.21.4", "1.21.4.jar");
-    return (versions == null ? Path.of("versions").resolve(example) : versions.resolve(example)).toString();
-  }
-
-  /**
-   * A dialog message that wraps at a readable width, with blank lines kept as paragraph breaks.
-   *
-   * @param message Plain text, with {@code \n} for line breaks.
-   */
-  private static JLabel dialogText(String message) {
-    String html = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
-    return new JLabel("<html><body style='width: 380px'>" + html + "</body></html>");
-  }
-
-  /**
    * Asks for a Minecraft game jar and, once its block assets are extracted, shows its textures. The extraction runs
    * in the background, and a file that is not a usable game jar is reported. Runs on the Swing thread.
    */
@@ -413,6 +439,7 @@ public final class ViewerApp {
       worker.useTexturedMesher(texturedMesher);
       uploadTree(ShapeMesher.mesh(tree.shapes()), textured);
       shadowStale = true;
+      occlusionStale = true;
     }
     ControlPanel.Stats stats = stats();
     SettingsPanel.Context context = panelContext();
@@ -471,6 +498,11 @@ public final class ViewerApp {
             panel::randomSeed, preferences.getBoolean(SIMPLE_VIEW_KEY, true),
             simple -> preferences.putBoolean(SIMPLE_VIEW_KEY, simple));
     settings.showContext(context);
+    settings.onTreeSize(() -> treeSize);
+    settings.onProfileShown(points -> redrawAfter(() -> {
+      editingProfile = points;
+      uploadEnvelope();
+    }));
     settingsPanel = settings;
     settingsHolder.add(settings, BorderLayout.CENTER);
     settingsHolder.revalidate();
@@ -485,8 +517,7 @@ public final class ViewerApp {
   void showDocument(PresetDocument next) {
     document = next;
     sourceName = next.displayName();
-    panel.showSource(sourceName);
-    attachSettings(new SettingsPanel.Context(blockCatalog, tree.blocks(), tree.plantLayers(), Set.of()));
+    attachSettings(new SettingsPanel.Context(blockCatalog, Set.of()));
     watchCurrentFile();
     statusChanged();
     commands.add(() -> frameNextTree = true);
@@ -523,7 +554,6 @@ public final class ViewerApp {
    */
   void presetSaved() {
     sourceName = document.displayName();
-    panel.showSource(sourceName);
     watchCurrentFile();
     settingsPanel.refresh();
   }
@@ -597,12 +627,14 @@ public final class ViewerApp {
     Consumer<Consumer<ViewerState>> viewEdit = edit -> redrawAfter(() -> {
       edit.accept(state);
       shadowStale = true;
+      occlusionStale = true;
     });
     panel = new ControlPanel(state, viewEdit, seed -> {
       editorSeed = seed;
       requestGeneration();
     }, () -> redrawAfter(this::frameTree));
     panel.showStats(stats);
+    viewPanel.showOver(panel.viewControls());
     JScrollPane controls = new JScrollPane(panel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
     controls.getVerticalScrollBar().setUnitIncrement(18);
@@ -616,7 +648,7 @@ public final class ViewerApp {
     JMenuBar menuBar = files.menuBar();
     menuBar.add(viewMenu(viewEdit));
     frame.setJMenuBar(menuBar);
-    settingsHolder.setPreferredSize(new Dimension(430, DEFAULT_HEIGHT));
+    settingsHolder.setPreferredSize(new Dimension(SETTINGS_WIDTH, DEFAULT_HEIGHT));
     attachSettings(context);
     JSplitPane outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, split, settingsHolder);
     outer.setResizeWeight(1);
@@ -634,7 +666,14 @@ public final class ViewerApp {
     frame.setSize(Math.min(1500, screen.width), Math.min(900, screen.height));
     frame.setLocationRelativeTo(null);
     frame.setVisible(true);
-    SwingUtilities.invokeLater(() -> controls.getViewport().setViewPosition(new java.awt.Point(0, 0)));
+    SwingUtilities.invokeLater(() -> {
+      // Once the window has its size: the settings get their starting width and the controls column keeps its own,
+      // and the view takes the rest. Left to the split panes, the settings got only what was left over.
+      outer.setDividerLocation(Math.max(outer.getWidth() / 2,
+              outer.getWidth() - outer.getDividerSize() - SETTINGS_WIDTH));
+      split.setDividerLocation(controls.getPreferredSize().width);
+      controls.getViewport().setViewPosition(new java.awt.Point(0, 0));
+    });
   }
 
   /**
@@ -696,7 +735,7 @@ public final class ViewerApp {
    * What the settings panel shows about the current tree: its blocks, active plant layers and unknown blocks.
    */
   private SettingsPanel.Context panelContext() {
-    return new SettingsPanel.Context(blockCatalog, tree.blocks(), tree.plantLayers(),
+    return new SettingsPanel.Context(blockCatalog,
             texturedMesh == null ? Set.of() : texturedMesh.unknownBlocks());
   }
 
@@ -725,19 +764,19 @@ public final class ViewerApp {
       grid.add(0.5f, 0, 0.5f, 0.5f + (float) normal.x(), (float) normal.y(), 0.5f + (float) normal.z(),
               1f, 0.55f, 0.85f);
     }
-    grid.add(0, 0.01f, 0, 3, 0.01f, 0, 0.95f, 0.3f, 0.3f);
-    grid.add(0, 0, 0, 0, 3, 0, 0.3f, 0.95f, 0.4f);
-    grid.add(0, 0.01f, 0, 0, 0.01f, 3, 0.35f, 0.55f, 1f);
     sceneLines.upload(grid);
     // Wide enough to hold the longest shadow the angled sun can cast.
     groundRenderer.upload(ground, extent + 1.3f * (bounds.max.y - bounds.min.y));
 
     forceMarkers = ForceMarkers.build(preset.forceList(), tree.seed(), bounds.min, bounds.max);
     forceLines.upload(forceMarkers.lines());
+    uploadEnvelope();
 
     LineRenderer.Lines branches = new LineRenderer.Lines();
+    TreeMap<Integer, ViewPanel.Legend> legend = new TreeMap<>();
     for (Branch branch : tree.skeleton().branches()) {
       float[] color = LEVEL_COLORS[branch.level() % LEVEL_COLORS.length];
+      legend.putIfAbsent(branch.level(), new ViewPanel.Legend(branch.level(), branch.levelName(), color));
       for (int i = 1; i < branch.nodes().size(); i++) {
         Vec3 a = branch.nodes().get(i - 1).position();
         Vec3 b = branch.nodes().get(i).position();
@@ -746,6 +785,7 @@ public final class ViewerApp {
       }
     }
     skeletonLines.upload(branches);
+    levelLegend = List.copyOf(legend.values());
     meshes.upload(mesh);
     texturedMesh = textured;
     if (textured != null) {
@@ -760,7 +800,22 @@ public final class ViewerApp {
     }
     voxelLinesStale = true;
     shadowStale = true;
+    occlusionStale = true;
     frameStale = true;
+  }
+
+  /**
+   * The up-to-date occupancy for ambient occlusion, in every lighting mode. It is rebuilt when the tree or what is
+   * shown changes, so hidden shapes darken nothing.
+   *
+   * @return the occupancy.
+   */
+  private OcclusionVolume currentOcclusion() {
+    if (occlusionStale) {
+      occlusionStale = false;
+      occlusion.upload(OcclusionVolume.build(tree.shapes(), state::isVisible));
+    }
+    return occlusion;
   }
 
   /**
@@ -841,7 +896,9 @@ public final class ViewerApp {
           if (framePixels == null || framePixels.capacity() < bytes) {
             framePixels = BufferUtils.createByteBuffer(bytes);
           }
-          viewPanel.present(target.readPixels(framePixels), viewWidth, viewHeight);
+          boolean branchesShown = state.splitView || state.drawsSkeleton();
+          viewPanel.present(target.readPixels(framePixels), viewWidth, viewHeight,
+                  branchesShown ? levelLegend : List.of(), state.splitView);
         }
       }
     } catch (InterruptedException e) {
@@ -936,8 +993,9 @@ public final class ViewerApp {
       usePane(rightStart, Math.max(1, width - rightStart), height);
       drawBlocks(shadows, false, false);
       usePane(0, leftWidth, height);
-      sceneLines.draw(viewProjection);
+      drawGrid();
       drawSkeleton();
+      drawEnvelope();
       drawDensity();
       drawForces();
       glEnable(GL_SCISSOR_TEST);
@@ -966,12 +1024,60 @@ public final class ViewerApp {
   }
 
   /**
+   * Draws the ground grid and the axes at the origin, scaled with the camera's distance so they stay one size on
+   * screen.
+   */
+  private void drawGrid() {
+    sceneLines.draw(viewProjection);
+    float length = camera.eye().length() * AXIS_SCREEN_SIZE;
+    axisLines.draw(new Matrix4f(viewProjection).scale(length));
+  }
+
+  /**
    * Draws the branch lines on top of everything.
    */
   private void drawSkeleton() {
     glDisable(GL_DEPTH_TEST);
     skeletonLines.draw(viewProjection);
     glEnable(GL_DEPTH_TEST);
+  }
+
+  /**
+   * Rebuilds the crown envelope's cage: from the radius being edited when there is one, otherwise from the preset
+   * when it uses the envelope.
+   */
+  private void uploadEnvelope() {
+    // The generator's own view of the preset: Simple sliders and this seed's size variety applied.
+    SpeciesPreset grown = SimpleAdjuster.apply(preset).forSeed(tree.seed());
+    treeSize = tree.skeleton().treeHeight() / grown.tree().sizeScale();
+    ShapeControl control = grown.shapeControl();
+    CrownEnvelope envelope = control.enabled() ? control.envelope() : null;
+    if (editingProfile != null) {
+      double[] pairs = Arrays.stream(editingProfile).flatMapToDouble(Arrays::stream).toArray();
+      try {
+        Curve radius = Curve.of(pairs).scaled(preset.simple().crownWidth());
+        envelope = new CrownEnvelope(control.crownBase(), radius, control.relativeRadius());
+      } catch (IllegalArgumentException e) {
+        // Points that do not make a curve yet; keep the preset's cage.
+      }
+    }
+    LineRenderer.Lines cage = new LineRenderer.Lines();
+    if (envelope != null) {
+      for (double[] s : EnvelopeOutline.segments(envelope, tree.skeleton(), grown.tree().sizeScale())) {
+        cage.add((float) s[0], (float) s[1], (float) s[2], (float) s[3], (float) s[4], (float) s[5],
+                0.55f, 0.75f, 0.95f);
+      }
+    }
+    envelopeLines.upload(cage);
+  }
+
+  /**
+   * Draws the crown envelope's cage, when shown or while its radius is being edited, hidden behind the blocks.
+   */
+  private void drawEnvelope() {
+    if (state.showEnvelope || editingProfile != null) {
+      envelopeLines.draw(viewProjection);
+    }
   }
 
   /**
@@ -995,15 +1101,15 @@ public final class ViewerApp {
    */
   private void drawBlocks(ShadowMap shadows, boolean withSkeleton, boolean withDensity) {
     if (shadows != null) {
-      groundRenderer.draw(viewProjection, shadows);
+      groundRenderer.draw(viewProjection, shadows, currentOcclusion());
     } else {
-      sceneLines.draw(viewProjection);
+      drawGrid();
     }
     if (state.drawsShapes()) {
       if (state.useTextures && texturedMesh != null) {
-        texturedRenderer.draw(viewProjection, state, shadows);
+        texturedRenderer.draw(viewProjection, state, shadows, currentOcclusion());
       } else {
-        meshes.draw(viewProjection, state, shadows);
+        meshes.draw(viewProjection, state, shadows, currentOcclusion());
       }
     }
     if (state.drawsVoxelGrid()) {
@@ -1013,6 +1119,7 @@ public final class ViewerApp {
     if (withSkeleton) {
       drawSkeleton();
     }
+    drawEnvelope();
     if (withDensity) {
       drawDensity();
     }
@@ -1045,7 +1152,7 @@ public final class ViewerApp {
       glfwTerminate();
       return;
     }
-    for (AutoCloseable resource : new AutoCloseable[]{shadowMap, groundRenderer, density, texturedRenderer, meshes, forceLines, voxelLines, skeletonLines, sceneLines, target}) {
+    for (AutoCloseable resource : new AutoCloseable[]{occlusion, shadowMap, groundRenderer, density, texturedRenderer, meshes, forceLines, envelopeLines, voxelLines, skeletonLines, sceneLines, axisLines, target}) {
       closeQuietly(resource);
     }
     glfwDestroyWindow(window);

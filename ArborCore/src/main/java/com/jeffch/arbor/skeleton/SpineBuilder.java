@@ -255,12 +255,8 @@ public final class SpineBuilder {
    * @param value Input value.
    */
   private static double smooth(double value) {
-    double t = clamp(value, 0, 1);
+    double t = Math.clamp(value, 0, 1);
     return t * t * (3 - 2 * t);
-  }
-
-  private static double clamp(double value, double min, double max) {
-    return Math.max(min, Math.min(max, value));
   }
 
   /**
@@ -386,7 +382,7 @@ public final class SpineBuilder {
     double radius = Math.max(0, bind(settings.absolute(), "radius.absolute").at(parentT)) * scale;
     double parentRadius = request.parent() == null ? 0 : request.parent().radius(parentT);
     radius += Math.max(0, bind(settings.percentOfParent(), "radius.percentOfParent").at(parentT)) * parentRadius;
-    radius = clamp(radius, settings.min() * scale, settings.max() * scale);
+    radius = Math.clamp(radius, settings.min() * scale, settings.max() * scale);
     if (request.parent() != null && settings.clampToParent()) {
       radius = Math.min(radius, parentRadius);
     }
@@ -408,7 +404,7 @@ public final class SpineBuilder {
     if (value <= 0) {
       return 0;
     }
-    return clamp(value, settings.min() * scale, settings.max() * scale);
+    return Math.clamp(value, settings.min() * scale, settings.max() * scale);
   }
 
   /**
@@ -567,7 +563,7 @@ public final class SpineBuilder {
       return direction;
     }
     Vec3 normal = preset.tree().ground().normal().normalized();
-    double angle = StrictMath.acos(clamp(normal.y(), -1, 1)) * (1 - smooth(s / recovery));
+    double angle = StrictMath.acos(Math.clamp(normal.y(), -1, 1)) * (1 - smooth(s / recovery));
     return rotate(direction, Vec3.UP.cross(normal).normalized(), angle);
   }
 
@@ -624,7 +620,7 @@ public final class SpineBuilder {
     ForceSettings.Wind wind = force.wind();
     double strength = force.strength() / (1 + force.falloff() * point.sub(BASE).length());
     // 0 at the ground and 1 at the treetop, raised to the height power so the top sways most.
-    double height = request.treeHeight() <= 0 ? 1 : clamp(point.y() / request.treeHeight(), 0, 1);
+    double height = request.treeHeight() <= 0 ? 1 : Math.clamp(point.y() / request.treeHeight(), 0, 1);
     double size = wind.gustSize() * scale;
     double gust = 1 + wind.gust() * (2 * bound.gusts().at(point.x() / size, point.y() / size, point.z() / size) - 1);
     double flex = 1 + wind.flexibility() * (1 - thickness);
@@ -767,7 +763,7 @@ public final class SpineBuilder {
     BreakSettings breakage = level.breakage();
     if (breakage.chance() > 0
             && TreeRandom.forPath(request.seed(), request.pathId() + "#break").chance(breakage.chance())) {
-      path = cutAtFraction(path, clamp(bind(breakage.spot(), "break.spot").at(parentT), 0.05, 1));
+      path = cutAtFraction(path, Math.clamp(bind(breakage.spot(), "break.spot").at(parentT), 0.05, 1));
     }
     path = cutAtHeight(path);
     if (usesEnvelope) {
@@ -854,7 +850,7 @@ public final class SpineBuilder {
       double s = Math.min(1, arc / plannedLength);
       double radius = baseRadius * settings.taper().eval(s);
       radius += (baseRadius - radius) * settings.lengthCompensation() * s;
-      nodes.add(new Node(path.get(i), clamp(radius, settings.min() * scale, settings.max() * scale)));
+      nodes.add(new Node(path.get(i), Math.clamp(radius, settings.min() * scale, settings.max() * scale)));
     }
     return nodes;
   }
@@ -957,7 +953,7 @@ public final class SpineBuilder {
      * @param s Fraction of the way along the branch, from 0 to 1.
      */
     Vec3 at(double s) {
-      double position = clamp(s, 0, 1) * (count - 1);
+      double position = Math.clamp(s, 0, 1) * (count - 1);
       int lower = Math.min(count - 2, (int) position);
       double blend = smooth(position - lower);
       return new Vec3(component(lower, 0, blend), component(lower, 1, blend), component(lower, 2, blend));

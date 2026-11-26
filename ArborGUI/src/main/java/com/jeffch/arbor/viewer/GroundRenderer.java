@@ -68,12 +68,14 @@ final class GroundRenderer implements AutoCloseable {
    *
    * @param viewProjection Combined view and projection matrix.
    * @param shadows        Shadow map, or null for none.
+   * @param occlusion      Occupancy for ambient occlusion, or null for none.
    */
-  void draw(Matrix4f viewProjection, ShadowMap shadows) {
+  void draw(Matrix4f viewProjection, ShadowMap shadows, OcclusionVolume occlusion) {
     program.use();
     program.setMatrix("uViewProjection", viewProjection);
     program.setVec3("uNormal", (float) normal.x(), (float) normal.y(), (float) normal.z());
     ShadowMap.apply(program, shadows);
+    OcclusionVolume.apply(program, occlusion);
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, CORNERS.length);
     glBindVertexArray(0);

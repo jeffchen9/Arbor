@@ -102,11 +102,13 @@ public final class MeshRenderer implements AutoCloseable {
    * @param viewProjection Combined view and projection matrix.
    * @param state          View settings, which decide what is visible.
    * @param shadows        Shadow map, or null for Minecraft face shading.
+   * @param occlusion      Occupancy for ambient occlusion, or null for none.
    */
-  void draw(Matrix4f viewProjection, ViewerState state, ShadowMap shadows) {
+  void draw(Matrix4f viewProjection, ViewerState state, ShadowMap shadows, OcclusionVolume occlusion) {
     program.use();
     program.setMatrix("uViewProjection", viewProjection);
     ShadowMap.apply(program, shadows);
+    OcclusionVolume.apply(program, occlusion);
     glEnable(GL_CULL_FACE);
     meshes.forEach((shapeClass, mesh) -> {
       if (mesh.vertexCount > 0 && state.isVisible(shapeClass)) {
