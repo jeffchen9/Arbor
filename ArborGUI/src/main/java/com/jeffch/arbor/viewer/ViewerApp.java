@@ -32,10 +32,13 @@ import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.Configuration;
 
+import com.formdev.flatlaf.extras.FlatSVGIcon;
+
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
@@ -58,9 +61,22 @@ import static org.lwjgl.opengl.GL33C.*;
  * The interactive tree viewer and one-frame screenshot renderer.
  */
 public final class ViewerApp {
+  /**
+   * The --views sheet: yaw and pitch of each view. Front and side at eye level match most photos; the side shows the
+   * depth the front hides, and the top shows the crown's spread.
+   */
+  private static final List<float[]> SHEET_ANGLES = List.of(new float[]{0, 0}, new float[]{90, 0},
+          new float[]{35, 18}, new float[]{0, OrbitCamera.MAX_PITCH});
+  private static final List<String> SHEET_LABELS = List.of("Front", "Side", "Three-quarter", "Top");
+  /**
+   * Background kept around the tree when a sheet's tiles are cropped, in pixels.
+   */
+  private static final int CROP_MARGIN = 6;
   private static final int DEFAULT_WIDTH = 1280;
   private static final int DEFAULT_HEIGHT = 800;
   private static final String SIMPLE_VIEW_KEY = "simpleTreeView";
+  private static final String SPLIT_SCREEN_KEY = "splitScreen";
+  private static final String SHOWN_PAGES_KEY = "splitScreenPages";
   private static final String MINECRAFT_JAR_KEY = "minecraftJar";
   private static final int GL_FAILURE = 3;
   private static final long COMMAND_WAIT_MILLIS = 8;
@@ -69,13 +85,14 @@ public final class ViewerApp {
    * The settings pane's starting width: enough for the Tree, Voxelizer, Decorators and Export tabs in one row.
    */
   private static final int SETTINGS_WIDTH = 540;
+  private static final int SETTINGS_MIN_WIDTH = 180;
   /**
    * The origin axes' length as a share of the camera's distance from the origin.
    */
   private static final float AXIS_SCREEN_SIZE = 0.06f;
   private static final float[][] LEVEL_COLORS = {
-          {0.92f, 0.72f, 0.42f}, {0.95f, 0.52f, 0.34f}, {0.48f, 0.82f, 0.56f}, {0.46f, 0.72f, 0.95f},
-          {0.78f, 0.60f, 0.95f},
+          {0.93f, 0.91f, 0.86f}, {0.98f, 0.58f, 0.22f}, {0.40f, 0.85f, 0.45f}, {0.40f, 0.68f, 1.00f},
+          {0.85f, 0.50f, 0.95f},
   };
 
   private final ViewerOptions options;
@@ -88,6 +105,21 @@ public final class ViewerApp {
   private final JPanel settingsHolder = new JPanel(new BorderLayout());
   private JFrame frame;
   private ViewPanel viewPanel;
+  private JScrollPane controls;
+  private JMenu viewMenu;
+  /**
+   * The 3D view's own window in split screen, or null.
+   */
+  private JFrame viewFrame;
+  private boolean splitScreen;
+  /**
+   * On one screen, whether the right pane holds Export rather than the settings.
+   */
+  private boolean exportPane;
+  /**
+   * Settings pages shown side by side in split screen.
+   */
+  private final Set<String> shownPages = new HashSet<>();
   private List<ViewPanel.Legend> levelLegend = List.of();
   private ControlPanel panel;
   private PresetFiles files;
@@ -121,6 +153,10 @@ public final class ViewerApp {
   private boolean shadowStale = true;
   private OcclusionVolume occlusion;
   private boolean occlusionStale = true;
+  /**
+   * The shape classes that shaded the textured mesh now on screen, or null when there is none.
+   */
+  private Set<ShapeClass> meshOccluders;
   private ForceMarkers.Markers forceMarkers;
   private MeshRenderer meshes;
   private TexturedRenderer texturedRenderer;
@@ -159,6 +195,9 @@ public final class ViewerApp {
     this.sourceName = sourceName;
     state = new ViewerState(options.seed());
     state.realisticLighting = options.realisticLighting();
+    if (options.wireframe()) {
+      state.mode = ViewerState.Mode.BRANCHES;
+    }
     editorSeed = options.seed();
   }
 
@@ -306,11 +345,19 @@ public final class ViewerApp {
    * user picked in an earlier session comes before the automatic search of the Minecraft install.
    */
   private TexturedMesher.Result loadAssets() {
+    return findAssets(options.assets()).map(this::useAssets).orElse(null);
+  }
+
+  /**
+   * The extracted Minecraft assets the editor uses: the --assets folder, then the environment variable, then a jar the
+   * user picked, then the newest installed version. Empty when there are none.
+   *
+   * @param explicit Folder from --assets, or null.
+   */
+  static Optional<Path> findAssets(Path explicit) {
     String pickedJar = Preferences.userNodeForPackage(ViewerApp.class).get(MINECRAFT_JAR_KEY, null);
-    Optional<Path> found = AssetsLocator.find(options.assets(), System.getenv(AssetsLocator.ENVIRONMENT_VARIABLE),
-            Path.of("").toAbsolutePath(),
+    return AssetsLocator.find(explicit, System.getenv(AssetsLocator.ENVIRONMENT_VARIABLE), Path.of("").toAbsolutePath(),
             () -> MinecraftAssets.remembered(pickedJar, MinecraftAssets.cacheFolder()).or(MinecraftAssets::installed));
-    return found.map(this::useAssets).orElse(null);
   }
 
   /**
@@ -495,7 +542,7 @@ public final class ViewerApp {
     settingsHolder.removeAll();
     Preferences preferences = Preferences.userNodeForPackage(ViewerApp.class);
     SettingsPanel settings = new SettingsPanel(document, this::requestGeneration, this::statusChanged, files::startFrom,
-            panel::randomSeed, preferences.getBoolean(SIMPLE_VIEW_KEY, true),
+            preferences.getBoolean(SIMPLE_VIEW_KEY, true),
             simple -> preferences.putBoolean(SIMPLE_VIEW_KEY, simple));
     settings.showContext(context);
     settings.onTreeSize(() -> treeSize);
@@ -503,6 +550,13 @@ public final class ViewerApp {
       editingProfile = points;
       uploadEnvelope();
     }));
+    if (splitScreen) {
+      settings.showPages(shownPages);
+    } else if (exportPane) {
+      settings.showExport();
+    } else {
+      settings.showPages(null);
+    }
     settingsPanel = settings;
     settingsHolder.add(settings, BorderLayout.CENTER);
     settingsHolder.revalidate();
@@ -533,6 +587,9 @@ public final class ViewerApp {
     }
     files.update();
     frame.setTitle((document.dirty() ? "*" : "") + sourceName + " - Arbor");
+    if (viewFrame != null) {
+      viewFrame.setTitle(sourceName + " - 3D view - Arbor");
+    }
   }
 
   /**
@@ -615,8 +672,8 @@ public final class ViewerApp {
   }
 
   /**
-   * Lays out the window: view controls and stats on the left, the 3D view in the middle, the preset settings on the
-   * right, and the File and View menus.
+   * Builds the editor window, its File and View menus, and lays it out as one screen or split screen, whichever was
+   * used last.
    *
    * @param stats   The first tree's numbers.
    * @param context What the first tree received.
@@ -635,26 +692,32 @@ public final class ViewerApp {
     }, () -> redrawAfter(this::frameTree));
     panel.showStats(stats);
     viewPanel.showOver(panel.viewControls());
-    JScrollPane controls = new JScrollPane(panel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    controls = new JScrollPane(panel, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
     controls.getVerticalScrollBar().setUnitIncrement(18);
     controls.setBorder(null);
-    controls.setPreferredSize(new Dimension(280, 300));
-    JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controls, viewPanel);
-    split.setResizeWeight(0);
+    // Dragging stops before the view mode buttons' names are cut short, leaving room for the scroll bar; the edge
+    // button still folds the panel away completely.
+    int controlsMin = panel.getMinimumSize().width + UIManager.getInt("ScrollBar.width");
+    controls.setMinimumSize(new Dimension(controlsMin, 0));
+    controls.setPreferredSize(new Dimension(Math.max(280, controlsMin), 300));
     frame = new JFrame("Arbor");
+    frame.setIconImages(com.formdev.flatlaf.extras.FlatSVGUtils.createWindowIconImages("/icons/arbor.svg"));
     frame.setLayout(new BorderLayout());
     files = new PresetFiles(frame, this);
-    JMenuBar menuBar = files.menuBar();
-    menuBar.add(viewMenu(viewEdit));
-    frame.setJMenuBar(menuBar);
     settingsHolder.setPreferredSize(new Dimension(SETTINGS_WIDTH, DEFAULT_HEIGHT));
+    // Narrow enough for half a laptop screen; the tabs wrap and the rows inside wrap or shrink.
+    settingsHolder.setMinimumSize(new Dimension(SETTINGS_MIN_WIDTH, 0));
+    Preferences preferences = Preferences.userNodeForPackage(ViewerApp.class);
+    String pages = preferences.get(SHOWN_PAGES_KEY, String.join(",", SettingsPanel.PAGES));
+    shownPages.addAll(pages.isEmpty() ? List.of() : List.of(pages.split(",")));
     attachSettings(context);
-    JSplitPane outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, split, settingsHolder);
-    outer.setResizeWeight(1);
-    frame.add(outer, BorderLayout.CENTER);
+    JMenuBar menuBar = files.menuBar();
+    // Made here, after the theme, so it looks like the File menu.
+    viewMenu = new JMenu("View");
+    menuBar.add(viewMenu);
+    viewMenu.setMnemonic(KeyEvent.VK_V);
+    frame.setJMenuBar(menuBar);
     watchCurrentFile();
-    statusChanged();
     frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     frame.addWindowListener(new WindowAdapter() {
       @Override
@@ -666,45 +729,228 @@ public final class ViewerApp {
     frame.setSize(Math.min(1500, screen.width), Math.min(900, screen.height));
     frame.setLocationRelativeTo(null);
     frame.setVisible(true);
-    SwingUtilities.invokeLater(() -> {
-      // Once the window has its size: the settings get their starting width and the controls column keeps its own,
-      // and the view takes the rest. Left to the split panes, the settings got only what was left over.
-      outer.setDividerLocation(Math.max(outer.getWidth() / 2,
-              outer.getWidth() - outer.getDividerSize() - SETTINGS_WIDTH));
-      split.setDividerLocation(controls.getPreferredSize().width);
-      controls.getViewport().setViewPosition(new java.awt.Point(0, 0));
-    });
+    // After the window is shown, so a split screen knows which screen the editor is on.
+    layOut(preferences.getBoolean(SPLIT_SCREEN_KEY, false));
+    statusChanged();
   }
 
   /**
-   * The View menu: Minecraft shading or realistic lighting, and split view.
+   * Lays the editor out as one screen, with the 3D view between the controls and the settings, or as split screen,
+   * with the 3D view in a window of its own, on another screen when there is one, and the controls beside the Tree,
+   * Voxelizer, Decorators and Export pages. The controls always show in split screen; the pages each have a button.
    *
-   * @param viewEdit Applies a change to the view settings on the render thread.
+   * @param split Whether to split the screen.
    */
-  private JMenu viewMenu(Consumer<Consumer<ViewerState>> viewEdit) {
-    JMenu menu = new JMenu("View");
-    menu.setMnemonic(KeyEvent.VK_V);
-    JRadioButtonMenuItem minecraft = new JRadioButtonMenuItem("Minecraft Shading", !options.realisticLighting());
-    JRadioButtonMenuItem realistic = new JRadioButtonMenuItem("Realistic Lighting", options.realisticLighting());
-    ButtonGroup group = new ButtonGroup();
-    group.add(minecraft);
-    group.add(realistic);
-    minecraft.addActionListener(event -> viewEdit.accept(viewer -> viewer.realisticLighting = false));
-    realistic.addActionListener(event -> viewEdit.accept(viewer -> viewer.realisticLighting = true));
-    menu.add(minecraft);
-    menu.add(realistic);
-    menu.addSeparator();
-    JCheckBoxMenuItem split = new JCheckBoxMenuItem("Split View (Wireframe and Blocks)");
-    split.addActionListener(event -> {
-      boolean on = split.isSelected();
-      viewEdit.accept(viewer -> viewer.splitView = on);
-    });
-    menu.add(split);
-    menu.addSeparator();
+  private void layOut(boolean split) {
+    splitScreen = split;
+    Preferences.userNodeForPackage(ViewerApp.class).putBoolean(SPLIT_SCREEN_KEY, split);
+    Container content = frame.getContentPane();
+    content.removeAll();
+    viewMenu.removeAll();
+    ButtonGroup screens = new ButtonGroup();
+    for (boolean splitItem : new boolean[]{false, true}) {
+      JRadioButtonMenuItem item = new JRadioButtonMenuItem(splitItem ? "Split Screen" : "Single Screen",
+              splitItem == split);
+      item.setToolTipText(splitItem ? "The 3D view in its own window, and every settings page side by side"
+              : "The 3D view and the settings in this window");
+      item.addActionListener(event -> {
+        if (splitScreen != splitItem) {
+          layOut(splitItem);
+        }
+      });
+      screens.add(item);
+      viewMenu.add(item);
+    }
+    viewMenu.addSeparator();
+    if (split) {
+      List<JComponent> buttons = new ArrayList<>();
+      for (String page : SettingsPanel.PAGES) {
+        ButtonModel shown = new JToggleButton.ToggleButtonModel();
+        shown.setSelected(shownPages.contains(page));
+        shown.addItemListener(event -> showPage(page, shown.isSelected()));
+        buttons.add(new UiParts.EdgeButton(page, new FlatSVGIcon("icons/page-" + page.toLowerCase(Locale.ROOT)
+                + ".svg"), true, shown));
+        viewMenu.add(menuToggle("Show " + page, shown, 0));
+      }
+      content.add(controls, BorderLayout.WEST);
+      content.add(settingsHolder, BorderLayout.CENTER);
+      content.add(edgeStrip(false, buttons.toArray(JComponent[]::new)), BorderLayout.EAST);
+      settingsPanel.showPages(shownPages);
+      openViewWindow();
+    } else {
+      closeViewWindow();
+      JSplitPane inner = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, controls, viewPanel);
+      inner.setResizeWeight(0);
+      JSplitPane outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inner, settingsHolder);
+      outer.setResizeWeight(1);
+      // Each side panel folds away with a button on its window edge, as tool windows do in IntelliJ, so a narrow
+      // window can still show the tree.
+      ButtonModel showControls = UiParts.sideModel(inner, true, controls.getPreferredSize().width);
+      // The right pane holds the settings or Export, one at a time, as tool windows sharing an edge do in IntelliJ:
+      // a button opens its pane in place of the other, and clicking the lit one closes the pane.
+      ButtonModel rightOpen = UiParts.sideModel(outer, false, SETTINGS_WIDTH);
+      ButtonModel showSettings = new JToggleButton.ToggleButtonModel();
+      ButtonModel showExport = new JToggleButton.ToggleButtonModel();
+      Runnable lightUp = () -> {
+        showSettings.setSelected(rightOpen.isSelected() && !exportPane);
+        showExport.setSelected(rightOpen.isSelected() && exportPane);
+      };
+      rightOpen.addItemListener(event -> lightUp.run());
+      showSettings.addActionListener(event -> showRight(rightOpen, false, showSettings.isSelected(), lightUp));
+      showExport.addActionListener(event -> showRight(rightOpen, true, showExport.isSelected(), lightUp));
+      lightUp.run();
+      viewMenu.add(menuToggle("Show Controls", showControls, KeyEvent.VK_OPEN_BRACKET));
+      viewMenu.add(menuToggle("Show Settings", showSettings, KeyEvent.VK_CLOSE_BRACKET));
+      viewMenu.add(menuToggle("Show Export", showExport, 0));
+      content.add(edgeStrip(true, new UiParts.EdgeButton("Controls", new FlatSVGIcon("icons/controls.svg"), false,
+              showControls)), BorderLayout.WEST);
+      content.add(outer, BorderLayout.CENTER);
+      content.add(edgeStrip(false,
+              new UiParts.EdgeButton("Settings", new FlatSVGIcon("icons/settings.svg"), true, showSettings),
+              new UiParts.EdgeButton("Export", new FlatSVGIcon("icons/page-export.svg"), true, showExport)),
+              BorderLayout.EAST);
+      if (exportPane) {
+        settingsPanel.showExport();
+      } else {
+        settingsPanel.showPages(null);
+      }
+      SwingUtilities.invokeLater(() -> {
+        // Once laid out: the settings get their starting width and the controls column keeps its own, and the view
+        // takes the rest. Left to the split panes, the settings got only what was left over.
+        outer.setDividerLocation(Math.max(outer.getWidth() / 2,
+                outer.getWidth() - outer.getDividerSize() - SETTINGS_WIDTH));
+        inner.setDividerLocation(controls.getPreferredSize().width);
+        controls.getViewport().setViewPosition(new java.awt.Point(0, 0));
+      });
+    }
+    viewMenu.addSeparator();
     JMenuItem locate = new JMenuItem("Locate Minecraft Jar...");
     locate.addActionListener(event -> locateMinecraftJar());
-    menu.add(locate);
-    return menu;
+    viewMenu.add(locate);
+    content.revalidate();
+    content.repaint();
+  }
+
+  /**
+   * On one screen: opens the right pane on the settings or on Export, or closes it.
+   *
+   * @param rightOpen Whether the right pane is open.
+   * @param export    Export rather than the settings.
+   * @param open      Whether to open it on that, or else close the pane.
+   * @param lightUp   Lights the edge button of whatever shows.
+   */
+  private void showRight(ButtonModel rightOpen, boolean export, boolean open, Runnable lightUp) {
+    if (open) {
+      exportPane = export;
+      if (export) {
+        settingsPanel.showExport();
+      } else {
+        settingsPanel.showPages(null);
+      }
+    }
+    rightOpen.setSelected(open);
+    lightUp.run();
+  }
+
+  /**
+   * Shows or hides one settings page in split screen, and remembers the choice.
+   *
+   * @param page Page name.
+   * @param show Whether to show it.
+   */
+  private void showPage(String page, boolean show) {
+    if (show) {
+      shownPages.add(page);
+    } else {
+      shownPages.remove(page);
+    }
+    Preferences.userNodeForPackage(ViewerApp.class).put(SHOWN_PAGES_KEY, String.join(",", shownPages));
+    settingsPanel.showPages(shownPages);
+  }
+
+  /**
+   * Gives the 3D view a window of its own: filling another screen when there is one, otherwise the right half of
+   * this one. Closing it goes back to one screen.
+   */
+  private void openViewWindow() {
+    viewFrame = new JFrame();
+    viewFrame.setIconImages(frame.getIconImages());
+    viewFrame.add(viewPanel, BorderLayout.CENTER);
+    viewFrame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+    viewFrame.addWindowListener(new WindowAdapter() {
+      @Override
+      public void windowClosing(WindowEvent event) {
+        layOut(false);
+      }
+    });
+    GraphicsDevice editorScreen = frame.getGraphicsConfiguration().getDevice();
+    GraphicsConfiguration target = frame.getGraphicsConfiguration();
+    for (GraphicsDevice device : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+      if (device != editorScreen) {
+        target = device.getDefaultConfiguration();
+        break;
+      }
+    }
+    Rectangle bounds = target.getBounds();
+    Insets insets = Toolkit.getDefaultToolkit().getScreenInsets(target);
+    Rectangle usable = new Rectangle(bounds.x + insets.left, bounds.y + insets.top,
+            bounds.width - insets.left - insets.right, bounds.height - insets.top - insets.bottom);
+    boolean ownScreen = target.getDevice() != editorScreen;
+    if (!ownScreen) {
+      usable.x += usable.width / 2;
+      usable.width -= usable.width / 2;
+    }
+    viewFrame.setBounds(usable);
+    statusChanged();
+    viewFrame.setVisible(true);
+    if (ownScreen) {
+      viewFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+    }
+  }
+
+  private void closeViewWindow() {
+    if (viewFrame == null) {
+      return;
+    }
+    viewFrame.getContentPane().remove(viewPanel);
+    viewFrame.dispose();
+    viewFrame = null;
+  }
+
+  /**
+   * A View menu checkbox that shares its state with an edge button.
+   *
+   * @param text  Menu text.
+   * @param model Shared state.
+   * @param key   Key pressed with Ctrl to toggle it, or 0 for none.
+   */
+  private static JCheckBoxMenuItem menuToggle(String text, ButtonModel model, int key) {
+    JCheckBoxMenuItem item = new JCheckBoxMenuItem(text);
+    item.setModel(model);
+    if (key != 0) {
+      item.setAccelerator(KeyStroke.getKeyStroke(key, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+    }
+    return item;
+  }
+
+  /**
+   * A strip down one edge of the window holding tool window buttons, as in IntelliJ.
+   *
+   * @param left    Whether the strip is on the left edge.
+   * @param buttons The buttons, top to bottom.
+   */
+  private static JComponent edgeStrip(boolean left, JComponent... buttons) {
+    JPanel strip = new JPanel();
+    strip.setLayout(new BoxLayout(strip, BoxLayout.Y_AXIS));
+    strip.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, left ? 0 : 1, 0, left ? 1 : 0, UIManager.getColor("Component.borderColor")),
+            BorderFactory.createEmptyBorder(4, 2, 4, 2)));
+    for (JComponent button : buttons) {
+      button.setAlignmentX(Component.CENTER_ALIGNMENT);
+      strip.add(button);
+      strip.add(Box.createVerticalStrut(4));
+    }
+    return strip;
   }
 
   /**
@@ -747,6 +993,7 @@ public final class ViewerApp {
    * @param textured Textured meshes, or null without assets.
    */
   private void uploadTree(Map<ShapeClass, float[]> mesh, TexturedMesher.Result textured) {
+    meshOccluders = textured == null ? null : textured.occluders();
     Bounds bounds = Bounds.of(tree);
     LineRenderer.Lines grid = new LineRenderer.Lines();
     int extent = (int) Math.ceil(Math.max(Math.max(Math.abs(bounds.min.x), Math.abs(bounds.max.x)),
@@ -871,8 +1118,153 @@ public final class ViewerApp {
    * Renders one frame at the default size and saves it.
    */
   private void renderScreenshot() {
-    renderScene(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-    Screenshot.write(options.screenshot(), target.readPixels(), target.width(), target.height());
+    if (options.variations() > 0 || !options.compare().isEmpty()) {
+      renderVariations();
+      return;
+    }
+    if (options.closeup() != null) {
+      renderCloseup();
+      return;
+    }
+    if (!options.views()) {
+      renderScene(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+      Screenshot.write(options.screenshot(),
+              keyed(Screenshot.image(target.readPixels(), target.width(), target.height()), true));
+      return;
+    }
+    // Only the tree, framed once for every view so sizes compare across them: these are for matching a photo, where
+    // the sun and wind markers and the ground would only hide and shrink it. Each tile is then cropped to the tree.
+    state.showForces = false;
+    state.showGround = false;
+    frameTree();
+    List<BufferedImage> tiles = new ArrayList<>();
+    for (float[] angles : SHEET_ANGLES) {
+      camera.turnTo(angles[0], angles[1]);
+      renderScene(DEFAULT_WIDTH / sheetDivisor(), DEFAULT_HEIGHT / sheetDivisor());
+      tiles.add(Screenshot.image(target.readPixels(), target.width(), target.height()));
+    }
+    Screenshot.write(options.screenshot(), keyed(Screenshot.sheet(Screenshot.cropToContent(tiles, CROP_MARGIN),
+            SHEET_LABELS), true));
+  }
+
+  /**
+   * One part of the tree, filling the image: the --closeup fractions pick a window of the tree as seen from the
+   * chosen view, bottom to top and left to right. In the top view, bottom to top runs from the near side to the far
+   * side.
+   */
+  private void renderCloseup() {
+    state.showForces = false;
+    state.showGround = false;
+    float[] angles = SHEET_ANGLES.get(options.view());
+    double yaw = Math.toRadians(angles[0]);
+    boolean top = options.view() == ViewerOptions.VIEWS.indexOf("top");
+    Vector3f right = new Vector3f((float) Math.cos(yaw), 0, (float) -Math.sin(yaw));
+    Vector3f up = top ? new Vector3f((float) -Math.sin(yaw), 0, (float) -Math.cos(yaw)) : new Vector3f(0, 1, 0);
+    // The blocks alone, so the fractions match what render's views show; the full bounds also hold invisible leaf
+    // density and skeleton.
+    Bounds bounds = Bounds.of(tree);
+    if (!tree.shapes().isEmpty()) {
+      int[] low = tree.shapes().min();
+      int[] high = tree.shapes().max();
+      bounds.min.set(low[0], low[1], low[2]);
+      bounds.max.set(high[0] + 1, high[1] + 1, high[2] + 1);
+    }
+    Vector3f center = new Vector3f(bounds.min).add(bounds.max).mul(0.5f);
+    float rightLow = Float.MAX_VALUE;
+    float rightHigh = -Float.MAX_VALUE;
+    float upLow = Float.MAX_VALUE;
+    float upHigh = -Float.MAX_VALUE;
+    for (int corner = 0; corner < 8; corner++) {
+      Vector3f point = new Vector3f((corner & 1) == 0 ? bounds.min.x : bounds.max.x,
+              (corner & 2) == 0 ? bounds.min.y : bounds.max.y, (corner & 4) == 0 ? bounds.min.z : bounds.max.z)
+              .sub(center);
+      rightLow = Math.min(rightLow, point.dot(right));
+      rightHigh = Math.max(rightHigh, point.dot(right));
+      upLow = Math.min(upLow, point.dot(up));
+      upHigh = Math.max(upHigh, point.dot(up));
+    }
+    double[] region = options.closeup();
+    float halfWidth = (float) (region[3] - region[2]) * (rightHigh - rightLow) / 2;
+    float halfHeight = (float) (region[1] - region[0]) * (upHigh - upLow) / 2;
+    Vector3f focus = new Vector3f(center)
+            .add(new Vector3f(right).mul(rightLow + (float) (region[2] + region[3]) / 2 * (rightHigh - rightLow)))
+            .add(new Vector3f(up).mul(upLow + (float) (region[0] + region[1]) / 2 * (upHigh - upLow)));
+    // frame() only uses the box's center and diagonal, so a flat box facing any way frames the window.
+    camera.frame(new Vector3f(focus).sub(halfWidth, halfHeight, 0), new Vector3f(focus).add(halfWidth, halfHeight, 0));
+    camera.turnTo(angles[0], angles[1]);
+    renderScene(DEFAULT_WIDTH / sheetDivisor(), DEFAULT_HEIGHT / sheetDivisor());
+    BufferedImage image = Screenshot.image(target.readPixels(), target.width(), target.height());
+    Screenshot.write(options.screenshot(), keyed(Screenshot.cropToContent(List.of(image), CROP_MARGIN).get(0), true));
+  }
+
+  /**
+   * A wireframe screenshot with a key under it: each branch level's color and name, and with {@code counts} how many
+   * branches of that level the tree has. Any other screenshot is returned as it is.
+   *
+   * @param image  The finished image.
+   * @param counts Whether to add branch counts; a sheet of several trees has no single count.
+   */
+  private BufferedImage keyed(BufferedImage image, boolean counts) {
+    if (!options.wireframe()) {
+      return image;
+    }
+    List<Screenshot.Key> keys = new ArrayList<>();
+    for (int i = 0; i < preset.levels().size(); i++) {
+      int level = i;
+      long branches = tree.skeleton().branches().stream().filter(branch -> branch.level() == level).count();
+      keys.add(new Screenshot.Key(preset.levels().get(i).name() + (counts ? ": " + branches : ""),
+              LEVEL_COLORS[i % LEVEL_COLORS.length]));
+    }
+    return Screenshot.withKey(image, keys);
+  }
+
+  /**
+   * How much smaller than a full screenshot each sheet tile is drawn: half size normally, full size with
+   * --high-detail, for about four times the pixels when a half-size tree is too small to read.
+   */
+  private int sheetDivisor() {
+    return options.highDetail() ? 1 : 2;
+  }
+
+  /**
+   * Several trees side by side from the front, framed once around all of them so their sizes compare too: the same
+   * preset on several seeds, which shows how much the trees differ, or the --compare designs on one seed, which shows
+   * what a setting does.
+   */
+  private void renderVariations() {
+    List<GeneratedTree> trees = new ArrayList<>(List.of(tree));
+    List<String> labels = new ArrayList<>(List.of(options.compare().isEmpty() ? "Seed " + tree.seed() : preset.name()));
+    for (int i = 1; i < options.variations(); i++) {
+      trees.add(TreeGenerator.generate(preset, options.seed() + i));
+      labels.add("Seed " + (options.seed() + i));
+    }
+    for (Path other : options.compare()) {
+      SpeciesPreset design = PresetLoader.load(other);
+      trees.add(TreeGenerator.generate(design, options.seed()));
+      labels.add(design.name());
+    }
+    Bounds all = Bounds.of(trees.get(0));
+    for (GeneratedTree other : trees) {
+      Bounds bounds = Bounds.of(other);
+      all.include(bounds.min.x, bounds.min.y, bounds.min.z);
+      all.include(bounds.max.x, bounds.max.y, bounds.max.z);
+    }
+    state.showForces = false;
+    state.showGround = false;
+    camera.frame(all.min, all.max);
+    camera.turnTo(0, 0);
+    List<BufferedImage> tiles = new ArrayList<>();
+    for (GeneratedTree variation : trees) {
+      tree = variation;
+      uploadTree(ShapeMesher.mesh(tree.shapes()),
+              texturedMesher == null ? null : texturedMesher.mesh(tree.shapes(), tree.blocks()));
+      shadowStale = true;
+      occlusionStale = true;
+      renderScene(DEFAULT_WIDTH / sheetDivisor(), DEFAULT_HEIGHT / sheetDivisor());
+      tiles.add(Screenshot.image(target.readPixels(), target.width(), target.height()));
+    }
+    Screenshot.write(options.screenshot(), keyed(Screenshot.sheet(Screenshot.cropToContent(tiles, CROP_MARGIN), labels),
+            false));
   }
 
   /**
@@ -889,6 +1281,7 @@ public final class ViewerApp {
         }
         glfwPollEvents();
         applyGeneration();
+        reshadeIfShownChanged();
         if (frameStale && viewWidth > 0 && viewHeight > 0) {
           frameStale = false;
           renderScene(viewWidth, viewHeight);
@@ -896,13 +1289,30 @@ public final class ViewerApp {
           if (framePixels == null || framePixels.capacity() < bytes) {
             framePixels = BufferUtils.createByteBuffer(bytes);
           }
-          boolean branchesShown = state.splitView || state.drawsSkeleton();
+          boolean split = state.mode == ViewerState.Mode.SPLIT;
           viewPanel.present(target.readPixels(framePixels), viewWidth, viewHeight,
-                  branchesShown ? levelLegend : List.of(), state.splitView);
+                  split || state.drawsSkeleton() ? levelLegend : List.of(), split);
         }
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
+   * Rebuilds the textured mesh when solid blocks or leaves are shown or hidden: its corner shading counts only the
+   * blocks shown, so hidden leaves leave no dark patches on the wood. Runs on the render thread.
+   */
+  private void reshadeIfShownChanged() {
+    if (texturedMesher == null || tree == null || meshOccluders == null) {
+      return;
+    }
+    Set<ShapeClass> shown = EnumSet.noneOf(ShapeClass.class);
+    TexturedMesher.OCCLUDERS.stream().filter(state::isVisible).forEach(shown::add);
+    if (!shown.equals(meshOccluders)) {
+      worker.useOccluders(shown);
+      uploadTree(ShapeMesher.mesh(tree.shapes()), texturedMesher.mesh(tree.shapes(), tree.blocks(), shown));
+      frameStale = true;
     }
   }
 
@@ -986,7 +1396,7 @@ public final class ViewerApp {
     glClearColor(0.09f, 0.10f, 0.12f, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     camera.view(view);
-    if (state.splitView) {
+    if (state.mode == ViewerState.Mode.SPLIT) {
       int leftWidth = Math.max(1, (width - SPLIT_DIVIDER) / 2);
       int rightStart = leftWidth + SPLIT_DIVIDER;
       // Blocks first: the density cloud ends smoothing, since it reads depth from the resolved frame.
@@ -1051,7 +1461,7 @@ public final class ViewerApp {
     SpeciesPreset grown = SimpleAdjuster.apply(preset).forSeed(tree.seed());
     treeSize = tree.skeleton().treeHeight() / grown.tree().sizeScale();
     ShapeControl control = grown.shapeControl();
-    CrownEnvelope envelope = control.enabled() ? control.envelope() : null;
+    CrownEnvelope envelope = control.enabled() ? control.envelope(tree.seed()) : null;
     if (editingProfile != null) {
       double[] pairs = Arrays.stream(editingProfile).flatMapToDouble(Arrays::stream).toArray();
       try {
@@ -1100,7 +1510,9 @@ public final class ViewerApp {
    * @param withDensity  Whether the leaf density cloud belongs in this pane; split view shows it with the wireframe.
    */
   private void drawBlocks(ShadowMap shadows, boolean withSkeleton, boolean withDensity) {
-    if (shadows != null) {
+    if (!state.showGround) {
+      // The screenshot sheets leave the ground out, so they can be cropped down to the tree.
+    } else if (shadows != null) {
       groundRenderer.draw(viewProjection, shadows, currentOcclusion());
     } else {
       drawGrid();

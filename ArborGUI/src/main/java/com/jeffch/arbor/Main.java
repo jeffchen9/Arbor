@@ -65,6 +65,12 @@ public final class Main {
     if (args.length > 0 && args[0].equals("export")) {
       return export(Arrays.copyOfRange(args, 1, args.length), out, err);
     }
+    if (args.length == 1 && args[0].equals("mcp")) {
+      // Only MCP messages may reach the client, so anything else printed goes to the error stream.
+      System.setOut(err);
+      com.jeffch.arbor.viewer.ArborMcp.serve(System.in, out);
+      return 0;
+    }
     // "view" is optional before a preset or an option; any other first word is an unknown command.
     boolean namesView = args.length > 0 && args[0].equals("view");
     if (args.length > 0 && !namesView && !args[0].endsWith(".json") && !args[0].startsWith("--")) {
@@ -88,7 +94,7 @@ public final class Main {
       err.println(e.getMessage());
       return BAD_INPUT;
     } catch (OutOfMemoryError e) {
-      err.println(options.preset() + ": preset needs too much memory; reduce counts, lengths or sizes");
+      err.println(options.preset() + ": tree needs too much memory; reduce counts, lengths or sizes");
       return BAD_INPUT;
     } catch (RuntimeException e) {
       err.println(options.preset() + ": cannot generate tree: " + e.getMessage());

@@ -110,7 +110,7 @@ public final class NodePlacer {
   }
 
   private static GenerationLimitException limitError() {
-    return new GenerationLimitException("preset exceeds the limit of " + MAX_BRANCHES + " branches");
+    return new GenerationLimitException("tree exceeds the limit of " + MAX_BRANCHES + " branches");
   }
 
   /**
@@ -166,7 +166,7 @@ public final class NodePlacer {
     int total = count(settings.count(), "count", 0, 0);
     List<Slot> slots = new ArrayList<>(total);
     for (int i = 0; i < total; i++) {
-      slots.add(new Slot(settings.first(), total == 0 ? 0 : i * 360.0 / total));
+      slots.add(new Slot(settings.first(), i * 360.0 / total));
     }
     return slots;
   }

@@ -33,16 +33,15 @@ public final class ViewerState {
   public static final Set<ShapeClass> FOLIAGE = EnumSet.of(ShapeClass.LEAVES, ShapeClass.PLANT,
           ShapeClass.DEAD_BUSH, ShapeClass.SAPLING);
   private final Set<ShapeClass> visible = EnumSet.allOf(ShapeClass.class);
-  public long seed;
+  public final long seed;
   public boolean showDensity;
-  public boolean showSkeleton;
   public boolean showVoxelGrid;
-  public boolean branchView;
+  public Mode mode = Mode.VOXELS;
   public boolean useTextures = true;
   public boolean showForces = true;
   public boolean showEnvelope;
+  public boolean showGround = true;
   public boolean realisticLighting;
-  public boolean splitView;
   public float densityThreshold = 0.05f;
   public float densityOpacity = 1.2f;
 
@@ -51,18 +50,26 @@ public final class ViewerState {
   }
 
   /**
-   * Split view always has a blocks half, whichever single view is selected.
+   * What the view draws: blocks, branch lines, the lines over the blocks, or the two side by side.
+   */
+  public enum Mode { VOXELS, BRANCHES, BOTH, SPLIT }
+
+  /**
+   * Every mode but Branches has blocks; in split view they fill the right half.
    */
   public boolean drawsShapes() {
-    return splitView || !branchView;
+    return mode != Mode.BRANCHES;
   }
 
   public boolean drawsVoxelGrid() {
     return drawsShapes() && showVoxelGrid;
   }
 
+  /**
+   * Whether a single, unsplit view draws the branch lines.
+   */
   public boolean drawsSkeleton() {
-    return branchView || showSkeleton;
+    return mode == Mode.BRANCHES || mode == Mode.BOTH;
   }
 
   public boolean isVisible(ShapeClass shapeClass) {

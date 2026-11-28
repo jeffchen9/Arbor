@@ -28,6 +28,7 @@ package com.jeffch.arbor.preset;
  * @param max              Longest allowed length, in blocks.
  * @param shapeScale       Multiplier on the length that fits inside the crown, for the scaleLength crown action.
  * @param stopShapeControl Whether this level and its children ignore the crown shape.
+ * @param crownReach       Share of the crown edge's distance from the center this level may reach; 1 is the edge.
  */
 public record LengthSettings(
         Param absolute,
@@ -36,5 +37,6 @@ public record LengthSettings(
         double min,
         double max,
         double shapeScale,
-        boolean stopShapeControl) {
+        boolean stopShapeControl,
+        double crownReach) {
 }

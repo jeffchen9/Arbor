@@ -688,7 +688,7 @@ public final class WoodVoxelizer {
    */
   private void checkVoxelLimit() {
     if (grid.size() > MAX_WOOD_VOXELS) {
-      throw new GenerationLimitException("preset exceeds the limit of " + MAX_WOOD_VOXELS + " wood voxels");
+      throw new GenerationLimitException("tree exceeds the limit of " + MAX_WOOD_VOXELS + " wood voxels");
     }
   }
 

@@ -67,22 +67,32 @@ public final class SimpleAdjuster {
     String root = preset.levels().get(0).name();
     List<LevelPreset> levels = new ArrayList<>();
     for (LevelPreset level : preset.levels()) {
-      levels.add(level(level, simple, perLevel, root));
+      levels.add(level(level, simple, perLevel, root, crownStart(preset)));
     }
     List<LeafGenerator> leaves = new ArrayList<>();
     for (LeafGenerator leaf : preset.leaves()) {
       leaves.add(leaf(leaf, simple.leafFullness()));
     }
     // Wind lean adds a wind force under a reserved name, which every level responds to fully.
-    List<ForceSettings> forces = new ArrayList<>(preset.forceList());
+    // Size moves attractors with the tree, so a bigger tree is pulled the same way.
+    List<ForceSettings> forces = new ArrayList<>();
+    for (ForceSettings force : preset.forceList()) {
+      forces.add(force.type() != ForceSettings.Type.ATTRACTOR ? force : new ForceSettings(force.name(), force.type(),
+              force.vector(), force.position().scale(simple.size()), force.strength(), force.falloff() / simple.size(),
+              force.wind()));
+    }
     if (simple.windLean() > 0) {
       forces.add(new ForceSettings(WIND_FORCE, ForceSettings.Type.WIND, new Vec3(1, 0, 0), Vec3.ZERO,
               simple.windLean() * WIND_STRENGTH, 0,
               new ForceSettings.Wind(WIND_HEADING_VARIANCE, 0, WIND_GUST_SIZE, WIND_HEIGHT_POWER, 0)));
     }
-    return new SpeciesPreset(preset.name(), tree(preset.tree(), simple), shapeControl(preset.shapeControl(), simple),
-            List.copyOf(forces), preset.shapes(), preset.blocks(), List.copyOf(levels), List.copyOf(leaves),
-            preset.plantLayers(), preset.survival(), SimpleSettings.NEUTRAL, preset.decorators());
+    double logs = simple.logBranches();
+    SurvivalSettings survival = new SurvivalSettings(logs(preset.survival().shapes(), logs), preset.survival().blocks(),
+            preset.survival().branchDensity());
+    return new SpeciesPreset(preset.name(), tree(preset.tree(), simple),
+            shapeControl(preset.shapeControl(), simple, crownShift(preset, simple)), List.copyOf(forces),
+            logs(preset.shapes(), logs), preset.blocks(), List.copyOf(levels), List.copyOf(leaves),
+            preset.plantLayers(), survival, SimpleSettings.NEUTRAL, preset.decorators());
   }
 
   /**
@@ -95,21 +105,23 @@ public final class SimpleAdjuster {
     // More size variety makes the largest seeds taller, so the height limit must not cut their tops off.
     double largestSeed = simple.sizeVariety() == null ? 1
             : Math.max(1, (1 + simple.sizeVariety()) / (1 + tree.sizeVariance()));
-    return new TreeSettings(tree.sizeScale(),
-            Math.min(MAX_TREE_HEIGHT, tree.maxHeight() * simple.height() * largestSeed),
-            tree.sink(), tree.roll(), tree.trunkSpread(),
+    return new TreeSettings(tree.sizeScale() * simple.size(),
+            Math.min(MAX_TREE_HEIGHT, tree.maxHeight() * simple.height() * simple.size() * largestSeed),
+            tree.roll(), tree.trunkSpread(),
             simple.sizeVariety() != null ? simple.sizeVariety() : tree.sizeVariance(), tree.ground(), tree.slopeRecovery());
   }
 
   /**
-   * Moves the crown base with the height and widens the crown shape with the crown width.
+   * Moves the crown base with the height and the crown start, and widens the crown shape with the crown width.
    *
    * @param control Crown shape settings.
    * @param simple  Slider values.
+   * @param crownShift How far the crown start slider moves the crown base, as a multiplier.
    */
-  private static ShapeControl shapeControl(ShapeControl control, SimpleSettings simple) {
-    return new ShapeControl(control.style(), control.crownBase() * simple.height(),
-            control.radius().scaled(simple.crownWidth()), control.action(), control.steer(), control.relativeRadius());
+  private static ShapeControl shapeControl(ShapeControl control, SimpleSettings simple, double crownShift) {
+    return new ShapeControl(control.style(), control.crownBase() * simple.height() * crownShift,
+            control.radius().scaled(simple.crownWidth()), control.action(), control.steer(), control.relativeRadius(),
+            control.lumpiness(), control.lumpSize());
   }
 
   /**
@@ -121,15 +133,18 @@ public final class SimpleAdjuster {
    * @param perLevel Share of the branch density slider each branch level takes, so the levels together multiply to the
    *                 slider.
    * @param root     Name of the root level.
+   * @param ownStart The preset's own crown start, which the crown start slider moves.
    */
-  private static LevelPreset level(LevelPreset level, SimpleSettings simple, double perLevel, String root) {
+  private static LevelPreset level(LevelPreset level, SimpleSettings simple, double perLevel, String root,
+                                   double ownStart) {
     boolean isRoot = level.parent() == null;
     double lengthFactor = isRoot ? simple.height() : simple.crownWidth();
     // Lengths sized from the parent already inherit its change, except that the trunk's height must not widen the crown.
     double parentFactor = root.equals(level.parent()) ? simple.crownWidth() / simple.height() : 1;
     double radiusFactor = isRoot ? simple.trunkThickness() : 1;
     return new LevelPreset(level.name(), level.parent(), level.segmentLength(),
-            isRoot ? level.generation() : generation(level.generation(), perLevel),
+            isRoot ? level.generation() : generation(level.generation(), perLevel,
+                    root.equals(level.parent()) ? simple.crownStart() : null, ownStart),
             length(level.length(), lengthFactor, parentFactor),
             isRoot ? level.orientation() : orientation(level.orientation(), simple.branchAngle()),
             isRoot ? level.shape() : shape(level.shape(), simple.droop()), noise(level.noise(), simple.twist()), level.jink(),
@@ -138,14 +153,19 @@ public final class SimpleAdjuster {
 
   /**
    * Multiplies the number of children by {@code factor}, whatever the placement mode: counts and densities grow,
-   * while spacings shrink.
+   * while spacings shrink. A crown start moves the placement range so its start lands there, keeping the tip end.
    *
-   * @param g      Generation settings.
-   * @param factor Multiplier for the number of children.
+   * @param g          Generation settings.
+   * @param factor     Multiplier for the number of children.
+   * @param crownStart Where children should start on the parent, or null to leave the range.
+   * @param ownStart   Where the preset's earliest children start, which moves to the crown start.
    */
-  private static GenerationSettings generation(GenerationSettings g, double factor) {
+  private static GenerationSettings generation(GenerationSettings g, double factor, Double crownStart,
+                                               double ownStart) {
     boolean byCount = g.mode() == GenerationSettings.Mode.FLOOD || g.mode() == GenerationSettings.Mode.ABSOLUTE;
-    return new GenerationSettings(g.mode(), g.first(), g.last(), g.clip(), g.rotation(), g.position(), g.sink(),
+    double first = crownStart == null ? g.first() : moved(g.first(), ownStart, crownStart);
+    double last = crownStart == null ? g.last() : moved(g.last(), ownStart, crownStart);
+    return new GenerationSettings(g.mode(), first, last, g.clip(), g.rotation(), g.position(), g.sink(),
             g.pruning(), g.knockout(), g.extendParent(), byCount ? g.count().scaled(factor) : g.count(),
             g.mode() == GenerationSettings.Mode.PROPORTIONAL ? g.density().scaled(factor) : g.density(),
             g.mode() == GenerationSettings.Mode.INTERVAL ? g.frequency().scaled(1 / factor) : g.frequency(),
@@ -166,7 +186,7 @@ public final class SimpleAdjuster {
   private static LengthSettings length(LengthSettings length, double factor, double parentFactor) {
     return new LengthSettings(length.absolute().scaled(factor), length.percentOfParent().scaled(parentFactor),
             length.percentOfRadius().scaled(factor), length.min() * factor, length.max() * factor, length.shapeScale(),
-            length.stopShapeControl());
+            length.stopShapeControl(), length.crownReach());
   }
 
   /**
@@ -248,5 +268,77 @@ public final class SimpleAdjuster {
             leaf.sizePercentOfParent().scaled(factor), leaf.scaleX(), leaf.scaleY(), leaf.scaleZ(), leaf.elongation(),
             leaf.skyInfluence(), leaf.fold(), leaf.align(), leaf.reach(), fuller, leaf.falloff(), leaf.noiseScale(),
             leaf.noiseStrength(), leaf.envelopeEdge(), leaf.shadePruning());
+  }
+  /**
+   * The preset's own crown start: the earliest position on the trunk where any branch level grows, or 0 without one.
+   *
+   * @param preset Preset as written.
+   */
+  static double crownStart(SpeciesPreset preset) {
+    String root = preset.levels().get(0).name();
+    return preset.levels().stream().filter(level -> root.equals(level.parent()))
+            .mapToDouble(level -> level.generation().first()).min().orElse(0);
+  }
+
+  /**
+   * How far the crown start slider moves the crown base: in proportion to the branches' start, or not at all when the
+   * slider is unset or the branches start at the base.
+   *
+   * @param preset Preset as written.
+   * @param simple Slider values.
+   */
+  private static double crownShift(SpeciesPreset preset, SimpleSettings simple) {
+    double own = crownStart(preset);
+    // ponytail: the trunk's length is only known once it grows, so the crown base moves by the same ratio as the start.
+    return simple.crownStart() == null || own <= 0 ? 1 : simple.crownStart() / own;
+  }
+
+  /**
+   * A position on the parent with the range from {@code from} to the tip stretched to start at {@code to} instead.
+   *
+   * @param t    Position from 0 (base) to 1 (tip).
+   * @param from Start of the range now.
+   * @param to   Where the range should start.
+   */
+  private static double moved(double t, double from, double to) {
+    return from >= 1 ? to : Math.clamp(to + (t - from) * (1 - to) / (1 - from), 0, 1);
+  }
+
+  /**
+   * Divides the thicknesses at which branches become logs, walls and leaf-drawn tips, so a higher factor draws more of
+   * the tree as logs.
+   *
+   * @param s      Voxelizer settings.
+   * @param factor Divisor for the thicknesses.
+   */
+  private static VoxelSettings logs(VoxelSettings s, double factor) {
+    if (factor == 1) {
+      return s;
+    }
+    double wall = s.wallRadius() / factor;
+    return new VoxelSettings(s.fullRadius() / factor, wall, s.wallGapChance(), s.thinCoverage(), s.gateChance(),
+            s.gateInWallChance(), s.openGateChance(), Math.min(wall, s.impliedRadius()), s.impliedLeafSize(),
+            s.impliedLeafStrength(), s.deadBushChance(), s.deadBushDensity(), s.deadBushOffFenceChance(),
+            s.smoothTrunk(), s.smoothStairDepth(), s.smoothSlabDepth(), s.smoothWallDepth(), s.smoothFenceDepth(),
+            s.buttonChance(), s.buttonSpacing(), s.tipCanopyDensity(), s.fineBranchChance(), s.fineGateChance(),
+            s.trunkFullRadius() / factor, s.saplingLeafDensity(), s.voxelRandomness(), s.leafBlockDensity(),
+            s.trimToCanopy(), s.survival());
+  }
+  /**
+   * The levels with the total number of final branches multiplied by {@code factor}, shared out over the branch levels
+   * as the branch density slider does.
+   *
+   * @param levels Levels, the trunk first.
+   * @param factor Multiplier for the number of final branches; 1 returns the same list.
+   */
+  static List<LevelPreset> branchDensity(List<LevelPreset> levels, double factor) {
+    long branchLevels = levels.stream().filter(level -> level.parent() != null).count();
+    if (factor == 1 || branchLevels == 0) {
+      return levels;
+    }
+    double perLevel = StrictMath.pow(factor, 1.0 / branchLevels);
+    return levels.stream().map(l -> l.parent() == null ? l : new LevelPreset(l.name(), l.parent(), l.segmentLength(),
+            generation(l.generation(), perLevel, null, 0), l.length(), l.orientation(), l.shape(), l.noise(), l.jink(),
+            l.path(), l.breakage(), l.prune(), l.forces(), l.radius(), l.flares(), l.wood())).toList();
   }
 }

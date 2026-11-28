@@ -47,7 +47,7 @@ public final class GenerationBudget {
     }
     // Written as "not within" so a NaN charge also fails.
     if (!(units <= MAX_WORK - used)) {
-      throw new GenerationLimitException("preset needs too much generation work; reduce counts, lengths or sizes");
+      throw new GenerationLimitException("tree needs too much generation work; reduce counts, lengths or sizes");
     }
     used += (long) Math.ceil(units);
   }

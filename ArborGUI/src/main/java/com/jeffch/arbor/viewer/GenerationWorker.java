@@ -24,6 +24,7 @@ import com.jeffch.arbor.shape.ShapeClass;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -36,6 +37,10 @@ public final class GenerationWorker implements AutoCloseable {
   private final AtomicReference<GenerationResult> ready = new AtomicReference<>();
   private final Thread thread;
   private volatile TexturedMesher texturedMesher;
+  /**
+   * The shape classes shown, whose blocks darken their neighbors in the textured mesh.
+   */
+  private volatile Set<ShapeClass> occluders = TexturedMesher.OCCLUDERS;
   private Request pending;
   private long newestId;
   private boolean closed;
@@ -72,6 +77,16 @@ public final class GenerationWorker implements AutoCloseable {
       lock.notifyAll();
       return newestId;
     }
+  }
+
+  /**
+   * Shades later trees by the shape classes now shown, so a tree that arrives while leaves are hidden has no shadows
+   * from them.
+   *
+   * @param shown The shape classes shown.
+   */
+  public void useOccluders(Set<ShapeClass> shown) {
+    occluders = Set.copyOf(shown);
   }
 
   /**
@@ -131,12 +146,12 @@ public final class GenerationWorker implements AutoCloseable {
     try {
       GeneratedTree tree = builder.apply(request.preset(), request.seed());
       TexturedMesher mesher = texturedMesher;
-      TexturedMesher.Result textured = mesher == null ? null : mesher.mesh(tree.shapes(), tree.blocks());
+      TexturedMesher.Result textured = mesher == null ? null : mesher.mesh(tree.shapes(), tree.blocks(), occluders);
       return new GenerationResult(request.id(), tree, ShapeMesher.mesh(tree.shapes()), textured, null,
               request.preset());
     } catch (OutOfMemoryError e) {
       return new GenerationResult(request.id(), null, null, null,
-              "preset needs too much memory; reduce counts, lengths or sizes", null);
+              "tree needs too much memory; reduce counts, lengths or sizes", null);
     } catch (RuntimeException e) {
       String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
       return new GenerationResult(request.id(), null, null, null, message, null);

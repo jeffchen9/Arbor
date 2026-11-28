@@ -24,7 +24,7 @@
     <parent>
         <groupId>com.jeffch.arbor</groupId>
         <artifactId>Arbor</artifactId>
-        <version>1.0.0-SNAPSHOT-2</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>ArborGUI</artifactId>
@@ -151,6 +151,11 @@
         <dependency>
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf-extras</artifactId>
+        </dependency>
+        <!-- The MCP server behind "arbor mcp", on the same Jackson 3 as the rest of Arbor. -->
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

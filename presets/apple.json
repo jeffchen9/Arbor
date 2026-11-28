@@ -76,8 +76,7 @@
     "smoothWallDepth": 0.16,
     "smoothFenceDepth": 0.3,
     "buttonChance": 0.03,
-    "buttonSpacing": 3,
-    "removeDetached": true
+    "buttonSpacing": 3
   },
   "blocks": {
     "log": {

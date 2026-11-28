@@ -31,20 +31,23 @@ import java.util.function.Consumer;
 import static com.jeffch.arbor.viewer.UiParts.capped;
 
 /**
- * The Simple view of the Tree tab: a starting tree and ten whole-tree sliders.
+ * The Simple view of the Tree tab: a starting tree and whole-tree sliders.
  */
 final class SimpleTreePanel extends JPanel {
   private static final int HALF_TRAVEL = 100;
   private static final double PRECISION = 100;
   private static final List<Control> CONTROLS = List.of(
-          new Control("height", 0.25, 3, "×", "Makes the trunk shorter or taller"),
-          new Control("crownWidth", 0.25, 3, "×", "Makes the crown narrower or wider"),
-          new Control("trunkThickness", 0.25, 3, "×", "Makes the trunk thinner or thicker"),
-          new Control("branchDensity", 0.25, 3, "×", "Changes the total number of branches"),
+          new Control("size", 0.25, 3, "%", "Scales the whole tree evenly"),
+          new Control("height", 0.25, 3, "%", "Makes the trunk shorter or taller"),
+          new Control("crownStart", 0, 0.95, "%", "How far up the trunk the branches start"),
+          new Control("crownWidth", 0.25, 3, "%", "Makes the crown narrower or wider"),
+          new Control("trunkThickness", 0.25, 3, "%", "Makes the trunk thinner or thicker"),
+          new Control("branchDensity", 0.25, 3, "%", "Changes the total number of branches"),
           new Control("branchAngle", -60, 60, "°", "Turns branches toward or away from their parent"),
           new Control("droop", -2, 2, "", "Lifts branches up or lets them hang down"),
-          new Control("twist", 0, 5, "×", "Makes branches straighter or more wandering"),
-          new Control("leafFullness", 0.25, 2, "×", "Makes foliage thinner or fuller"),
+          new Control("twist", 0, 5, "%", "Makes branches straighter or more wandering"),
+          new Control("logBranches", 0.25, 4, "%", "Draws more branches as logs, or more as walls and fences"),
+          new Control("leafFullness", 0.25, 2, "%", "Makes foliage thinner or fuller"),
           new Control("windLean", 0, 2, "", "Leans the tree in a steady wind"),
           new Control("sizeVariety", 0, 1, "", "How much tree size differs between seeds"));
   private final PresetDocument document;
@@ -56,9 +59,8 @@ final class SimpleTreePanel extends JPanel {
    * @param document  Preset being edited.
    * @param edited    Told after a slider changes the preset.
    * @param startFrom Asked to start over from a bundled preset.
-   * @param newRandom Asked to show a new random tree.
    */
-  SimpleTreePanel(PresetDocument document, Runnable edited, Consumer<String> startFrom, Runnable newRandom) {
+  SimpleTreePanel(PresetDocument document, Runnable edited, Consumer<String> startFrom) {
     this.document = document;
     this.edited = edited;
     setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -68,9 +70,19 @@ final class SimpleTreePanel extends JPanel {
     CONTROLS.forEach(control -> add(sliderRow(control)));
     JButton reset = new JButton("Reset sliders");
     reset.addActionListener(event -> reset());
-    JButton random = new JButton("New random tree");
-    random.addActionListener(event -> newRandom.run());
-    add(UiParts.row(reset, random));
+    add(UiParts.row(reset));
+  }
+
+  /**
+   * One line per slider, in the format {@link ArborTools#describeSettings} uses.
+   *
+   * @param document Preset whose current values are shown.
+   */
+  static List<String> describe(PresetDocument document) {
+    return CONTROLS.stream().map(control -> "simple." + control.key() + " | "
+            + SettingNames.of("simple." + control.key()) + " | " + SettingNames.unit("simple." + control.key())
+            + " | NUMBER | " + control.low() + ".." + control.high() + " | current "
+            + document.simpleValue(control.key())).toList();
   }
 
   /**
@@ -151,24 +163,23 @@ final class SimpleTreePanel extends JPanel {
     int max = center >= control.high() ? 0 : HALF_TRAVEL;
     int tick = tickOf(control, center, document.simpleValue(control.key()));
     JSlider slider = new JSlider(min, max, Math.max(min, Math.min(max, tick)));
-    DecimalFormat format = new DecimalFormat("0.##");
     Hashtable<Integer, JLabel> marks = new Hashtable<Integer, JLabel>();
-    marks.put(min, mark(format.format(min == 0 ? center : control.low())));
+    marks.put(min, mark(control.text(min == 0 ? center : control.low())));
     // A preset's own size variety can be above the slider's range, so the end mark shows the real value.
-    marks.put(max, mark(format.format(max == 0 ? document.simpleNeutral(control.key()) : control.high())));
+    marks.put(max, mark(control.text(max == 0 ? document.simpleNeutral(control.key()) : control.high())));
     if (min < 0 && max > 0) {
-      marks.put(0, mark(format.format(center)));
+      marks.put(0, mark(control.text(center)));
     }
     slider.setLabelTable(marks);
     slider.setPaintLabels(true);
     slider.setToolTipText(control.tip());
-    JLabel value = new JLabel(format.format(document.simpleValue(control.key())) + control.unit());
+    JLabel value = new JLabel(control.text(document.simpleValue(control.key())));
     value.setHorizontalAlignment(SwingConstants.RIGHT);
     slider.addChangeListener(event -> {
       // At the center the stored value is removed, so a preset's own size variety stays exact.
       double chosen = slider.getValue() == 0 ? document.simpleNeutral(control.key())
               : valueAt(control, center, slider.getValue());
-      value.setText(format.format(chosen) + control.unit());
+      value.setText(control.text(chosen));
       if (!resetting) {
         document.setSimpleValue(control.key(), chosen);
         edited.run();
@@ -204,9 +215,12 @@ final class SimpleTreePanel extends JPanel {
    * @param key  Name inside the preset's simple section.
    * @param low  Value at the left end.
    * @param high Value at the right end.
-   * @param unit Text shown after the value.
+   * @param unit Text shown after the value; "%" shows a multiplier as a percentage of the preset, 1 being 100%.
    * @param tip  Plain description of the effect.
    */
   private record Control(String key, double low, double high, String unit, String tip) {
+    String text(double value) {
+      return unit.equals("%") ? Math.round(value * 100) + "%" : new DecimalFormat("0.##").format(value) + unit;
+    }
   }
 }

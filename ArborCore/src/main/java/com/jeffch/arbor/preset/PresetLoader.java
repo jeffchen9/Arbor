@@ -18,11 +18,11 @@
 
 package com.jeffch.arbor.preset;
 
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.*;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 import com.jeffch.arbor.math.Vec3;
 
 import java.io.IOException;
@@ -40,9 +40,9 @@ import java.util.regex.Pattern;
  * Loads and validates species presets, naming the JSON path of every problem.
  */
 public final class PresetLoader {
-  private static final ObjectMapper MAPPER = new ObjectMapper(JsonFactory.builder()
+  private static final ObjectMapper MAPPER = tools.jackson.databind.json.JsonMapper.builder()
           .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-          .build());
+          .build();
   private static final double INF = Double.POSITIVE_INFINITY;
   private static final Curve DEFAULT_TAPER = Curve.of(0, 1, 1, 0.15);
 
@@ -117,7 +117,12 @@ public final class PresetLoader {
    * @param schema Receives a description of every setting read, for the editor, or null when not needed.
    */
   public static SpeciesPreset parse(Path file, ObjectNode root, List<SettingField> schema) {
-    return species(new Reader(file, root, "", schema));
+    try {
+      return species(new Reader(file, root, "", schema));
+    } catch (JacksonException e) {
+      // Jackson 3 throws on reading an object or array as text or a number; a check missed here stays a preset error.
+      throw new PresetException(file + ": $: a setting has the wrong kind of value: " + e.getOriginalMessage(), e);
+    }
   }
 
   /**
@@ -145,7 +150,7 @@ public final class PresetLoader {
     JsonNode root;
     try {
       root = MAPPER.readTree(text);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       throw new PresetException(file + ": " + syntaxLocation(e) + ": invalid JSON: " + e.getOriginalMessage(), e);
     }
     if (!(root instanceof ObjectNode object)) {
@@ -193,15 +198,15 @@ public final class PresetLoader {
    *
    * @param e The syntax error.
    */
-  private static String syntaxLocation(JsonProcessingException e) {
+  private static String syntaxLocation(JacksonException e) {
     String field = "$";
-    if (e.getProcessor() instanceof JsonParser parser) {
-      String pointer = parser.getParsingContext().pathAsPointer().toString();
+    if (e.processor() instanceof JsonParser parser) {
+      String pointer = parser.streamReadContext().pathAsPointer().toString();
       if (!pointer.isEmpty()) {
         field = pointer.substring(1).replaceAll("/(\\d+)(?=/|$)", "[$1]").replace('/', '.');
       }
     }
-    JsonLocation location = e.getLocation();
+    TokenStreamLocation location = e.getLocation();
     return location == null ? field
             : field + " (line " + location.getLineNr() + ", column " + location.getColumnNr() + ")";
   }
@@ -287,14 +292,18 @@ public final class PresetLoader {
    */
   private static SimpleSettings simple(Reader json) {
     double sizeVariety = json.number("sizeVariety", Double.NaN, 0, 1);
+    double crownStart = json.number("crownStart", Double.NaN, 0, 0.95);
     SimpleSettings settings = new SimpleSettings(
+            json.number("size", 1, 0.25, 3),
             json.number("height", 1, 0.25, 3),
+            Double.isNaN(crownStart) ? null : Double.valueOf(crownStart),
             json.number("crownWidth", 1, 0.25, 3),
             json.number("trunkThickness", 1, 0.25, 3),
             json.number("branchDensity", 1, 0.25, 3),
             json.number("branchAngle", 0, -60, 60),
             json.number("droop", 0, -2, 2),
             json.number("twist", 1, 0, 5),
+            json.number("logBranches", 1, 0.25, 4),
             json.number("leafFullness", 1, 0.25, 2),
             json.number("windLean", 0, 0, 2),
             Double.isNaN(sizeVariety) ? null : Double.valueOf(sizeVariety));
@@ -303,7 +312,7 @@ public final class PresetLoader {
   }
 
   /**
-   * Whole-tree settings: size, height limit, sink, roll, trunk spread, size variety and ground slope.
+   * Whole-tree settings: size, height limit, roll, trunk spread, size variety and ground slope.
    *
    * @param json The preset's top level.
    */
@@ -311,12 +320,13 @@ public final class PresetLoader {
     TreeSettings settings = new TreeSettings(
             json.number("sizeScale", 1, 1e-3, 1000),
             json.requiredNumber("maxHeight", 1, 384),
-            json.number("sink", 0, -INF, INF),
             json.param("roll", Param.of(0)),
             json.number("trunkSpread", 0, 0, 64),
             json.number("sizeVariance", 0, 0, 0.9),
             new GroundPlane(json.vector("groundNormal", Vec3.UP)),
             json.number("slopeRecovery", 0.3, 0, 1));
+    // The trunk sink setting was removed; designs saved with it still load.
+    json.take("sink");
     if (settings.sizeScale() <= 0) {
       throw json.error("sizeScale", "must be greater than 0");
     }
@@ -341,7 +351,9 @@ public final class PresetLoader {
     Curve radius = json.curve("radius", Curve.constant(8));
     ShapeControl settings = new ShapeControl(style, crownBase, radius,
             json.choice("action", ACTIONS, ShapeControl.Action.STOP),
-            json.number("steer", 0, 0, INF), relative);
+            json.number("steer", 0, 0, INF), relative,
+            json.number("lumpiness", 0, 0, 1),
+            json.number("lumpSize", 6, 0.5, 64));
     json.finish();
     return settings;
   }
@@ -434,8 +446,9 @@ public final class PresetLoader {
             json.number("voxelRandomness", 0, 0, 1),
             json.number("leafBlockDensity", 0, 0, 1),
             json.bool("trimToCanopy", false),
-            json.bool("removeDetached", false),
             json.choice("mode", Map.of("advanced", Boolean.FALSE, "survival", Boolean.TRUE), Boolean.FALSE));
+    // Floating blocks are now always removed; designs saved with the old switch still load.
+    json.take("removeDetached");
     for (String removed : REMOVED_SHAPE_SETTINGS) {
       if (json.fieldNames().contains(removed)) {
         throw json.error(removed, "was removed; describe plants with plantLayers instead");
@@ -468,6 +481,8 @@ public final class PresetLoader {
             values.bool("trimToCanopy", advanced.trimToCanopy()),
             values.number("voxelRandomness", advanced.voxelRandomness(), 0, 1),
             values.number("leafBlockDensity", defaultLeafDensity, 0, 1));
+    // Without fences, every branch is a log, so Survival trees grow fewer of them.
+    double branchDensity = values.number("branchDensity", 0.5, 0.05, 3);
     values.finish();
     Reader blockValues = json.child("blocks");
     BlockSettings inherited = SurvivalSettings.palette(advancedBlocks);
@@ -489,7 +504,7 @@ public final class PresetLoader {
     }
     blockValues.finish();
     json.finish();
-    return new SurvivalSettings(shapes, BlockSettings.ofRules(rules));
+    return new SurvivalSettings(shapes, BlockSettings.ofRules(rules), branchDensity);
   }
 
   /**
@@ -641,7 +656,8 @@ public final class PresetLoader {
             json.param("percentOfRadius", Param.of(0)),
             min, max,
             json.number("shapeScale", 1, 0, INF),
-            json.bool("stopShapeControl", false));
+            json.bool("stopShapeControl", false),
+            json.number("crownReach", 1, 0.05, 2));
     json.finish();
     return settings;
   }
@@ -1017,7 +1033,7 @@ public final class PresetLoader {
      */
     List<String> fieldNames() {
       List<String> names = new ArrayList<>();
-      node.fieldNames().forEachRemaining(names::add);
+      names.addAll(node.propertyNames());
       return names;
     }
 
@@ -1139,10 +1155,10 @@ public final class PresetLoader {
       if (value == null) {
         return fallback;
       }
-      if (!value.isTextual() || value.textValue().isBlank()) {
+      if (!value.isString() || value.stringValue().isBlank()) {
         throw error(key, "expected text");
       }
-      return value.textValue();
+      return value.stringValue();
     }
 
     /**
@@ -1365,12 +1381,13 @@ public final class PresetLoader {
       if (!value.isObject() || !value.has("rule")) {
         return new BlockRule.Noise(parseWeights(key, value, allowOff), 1);
       }
-      String kind = value.get("rule").asText();
+      String kind = value.get("rule").isString() ? value.get("rule").asString() : value.get("rule").toString();
       return switch (kind) {
         case "noise" -> noiseRule(key, value, allowOff);
         case "height" -> heightRule(key, value);
         case "level" -> levelRule(key, value);
-        default -> throw error(key, "unknown rule '" + kind + "'");
+        default -> throw error(key, "unknown rule '" + kind + "'; the rules are noise, height and level, and a plain"
+                + " {block: weight, ...} object mixes blocks at random");
       };
     }
 
@@ -1382,7 +1399,7 @@ public final class PresetLoader {
      * @param allowed Keys the rule uses.
      */
     private void onlyFields(String key, JsonNode value, Set<String> allowed) {
-      for (Iterator<String> names = value.fieldNames(); names.hasNext(); ) {
+      for (Iterator<String> names = value.propertyNames().iterator(); names.hasNext(); ) {
         String name = names.next();
         if (!allowed.contains(name)) {
           throw error(key, "unknown rule setting '" + name + "'");
@@ -1404,7 +1421,8 @@ public final class PresetLoader {
         throw error(key, "noise rule needs blocks");
       }
       JsonNode clump = value.get("clump");
-      if (clump != null && (!clump.isIntegralNumber() || clump.asInt() < 1 || clump.asInt() > BlockRule.MAX_CLUMP)) {
+      if (clump != null && (!clump.isIntegralNumber() || !clump.canConvertToInt() || clump.asInt() < 1
+              || clump.asInt() > BlockRule.MAX_CLUMP)) {
         throw error(key, "clump must be a whole number from 1 to " + BlockRule.MAX_CLUMP);
       }
       return new BlockRule.Noise(parseWeights(key, blocks, allowOff), clump == null ? 1 : clump.asInt());
@@ -1427,11 +1445,11 @@ public final class PresetLoader {
       double previous = 0;
       for (int i = 0; i < items.size(); i++) {
         JsonNode item = items.get(i);
-        if (!item.path("block").isTextual()) {
+        if (!item.path("block").isString()) {
           throw error(key, "each band needs a block");
         }
         onlyFields(key, item, Set.of("below", "block"));
-        String block = blockName(key, item.get("block").textValue(), false);
+        String block = blockName(key, item.get("block").stringValue(), false);
         boolean last = i == items.size() - 1;
         if (last) {
           if (item.has("below")) {
@@ -1464,7 +1482,7 @@ public final class PresetLoader {
      */
     private BlockRule levelRule(String key, JsonNode value) {
       onlyFields(key, value, Set.of("rule", "levels", "other"));
-      if (!value.path("other").isTextual()) {
+      if (!value.path("other").isString()) {
         throw error(key, "level rule needs an 'other' block");
       }
       JsonNode items = value.get("levels");
@@ -1472,14 +1490,14 @@ public final class PresetLoader {
         throw error(key, "level rule needs 'levels'");
       }
       Map<String, String> levels = new HashMap<>();
-      for (Iterator<Map.Entry<String, JsonNode>> fields = items.fields(); fields.hasNext(); ) {
+      for (Iterator<Map.Entry<String, JsonNode>> fields = items.properties().iterator(); fields.hasNext(); ) {
         Map.Entry<String, JsonNode> field = fields.next();
-        if (!field.getValue().isTextual()) {
+        if (!field.getValue().isString()) {
           throw error(key, "level '" + field.getKey() + "' needs a block");
         }
-        levels.put(field.getKey(), blockName(key, field.getValue().textValue(), false));
+        levels.put(field.getKey(), blockName(key, field.getValue().stringValue(), false));
       }
-      return new BlockRule.ByLevel(levels, blockName(key, value.get("other").textValue(), false));
+      return new BlockRule.ByLevel(levels, blockName(key, value.get("other").stringValue(), false));
     }
 
     /**
@@ -1490,15 +1508,15 @@ public final class PresetLoader {
      * @param allowOff Whether the list may be {@code off}.
      */
     private WeightedBlocks parseWeights(String key, JsonNode value, boolean allowOff) {
-      if (value.isTextual()) {
-        return WeightedBlocks.of(blockName(key, value.textValue(), allowOff));
+      if (value.isString()) {
+        return WeightedBlocks.of(blockName(key, value.stringValue(), allowOff));
       }
       if (!value.isObject() || value.isEmpty()) {
         throw error(key, "expected a block name or a list of blocks with weights");
       }
       List<WeightedBlocks.Entry> entries = new ArrayList<>();
       double total = 0;
-      for (Iterator<Map.Entry<String, JsonNode>> fields = value.fields(); fields.hasNext(); ) {
+      for (Iterator<Map.Entry<String, JsonNode>> fields = value.properties().iterator(); fields.hasNext(); ) {
         Map.Entry<String, JsonNode> field = fields.next();
         String block = blockName(key, field.getKey(), allowOff);
         if (!field.getValue().isNumber() || !Double.isFinite(field.getValue().asDouble())) {

@@ -29,7 +29,7 @@ import java.util.Map;
  * A table of facts about the current tree, with names on the left and values on the right.
  */
 final class StatsPanel extends JPanel {
-  private static final Map<ShapeClass, String> SHAPE_LABELS = shapeLabels();
+  static final Map<ShapeClass, String> SHAPE_LABELS = shapeLabels();
 
   private static final int MAIN_ROWS = 2;
   private static final String MORE = "More details";

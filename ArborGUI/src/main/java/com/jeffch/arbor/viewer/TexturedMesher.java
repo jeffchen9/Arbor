@@ -38,6 +38,10 @@ public final class TexturedMesher {
    */
   private static final float OCCLUSION_STEP = 0.2f;
   private static final float[] WHITE = {1f, 1f, 1f};
+  /**
+   * The shape classes that darken their neighbors' corners, as in Minecraft: full blocks and leaves.
+   */
+  static final Set<ShapeClass> OCCLUDERS = Set.copyOf(EnumSet.of(ShapeClass.FULL, ShapeClass.LEAVES));
   private static final float[] ZERO_NORMAL = {0f, 0f, 0f};
   private static final float[][] CUBE_NORMALS = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
   private static final float[][][] CUBE_FACES = {
@@ -107,6 +111,16 @@ public final class TexturedMesher {
   }
 
   /**
+   * Whether a neighbor darkens a corner: it must occlude and be shown, so hidden leaves leave no shadow behind.
+   *
+   * @param neighbor  The block beside the corner, or null.
+   * @param occluders The shape classes shown that may darken.
+   */
+  private static boolean darkens(Shape neighbor, Set<ShapeClass> occluders) {
+    return neighbor != null && occludes(neighbor) && occluders.contains(neighbor.shapeClass());
+  }
+
+  /**
    * Light from 0 to 1 at each quad corner, from the four blocks in front of the face that touch that corner.
    *
    * @param grid The tree's shapes.
@@ -114,8 +128,9 @@ public final class TexturedMesher {
    * @param y    Block y.
    * @param z    Block z.
    * @param quad The face.
+   * @param occluders The shape classes shown that may darken.
    */
-  private static float[] cornerLight(ShapeGrid grid, int x, int y, int z, ModelQuad quad) {
+  private static float[] cornerLight(ShapeGrid grid, int x, int y, int z, ModelQuad quad, Set<ShapeClass> occluders) {
     float[] normal = quad.normal();
     int axis = 0;
     for (int i = 1; i < 3; i++) {
@@ -138,7 +153,7 @@ public final class TexturedMesher {
           cell[first] += a * firstStep;
           cell[second] += b * secondStep;
           Shape neighbor = grid.get(cell[0], cell[1], cell[2]);
-          if (neighbor != null && occludes(neighbor)) {
+          if (darkens(neighbor, occluders)) {
             blocked++;
           }
         }
@@ -167,6 +182,19 @@ public final class TexturedMesher {
    * @param blocks The tree's chosen blocks.
    */
   public Result mesh(ShapeGrid grid, TreeBlocks blocks) {
+    return mesh(grid, blocks, OCCLUDERS);
+  }
+
+  /**
+   * As {@link #mesh(ShapeGrid, TreeBlocks)}, with corners darkened only by the shape classes that are shown, so
+   * hiding leaves also takes away their shadow on the wood.
+   *
+   * @param grid      The tree's shapes.
+   * @param blocks    The tree's chosen blocks.
+   * @param occluders The shape classes shown that may darken; others are treated as empty.
+   */
+  public Result mesh(ShapeGrid grid, TreeBlocks blocks, Set<ShapeClass> occluders) {
+    Set<ShapeClass> darkening = Set.copyOf(occluders.stream().filter(OCCLUDERS::contains).toList());
     Map<ShapeClass, Buffer> buffers = new EnumMap<>(ShapeClass.class);
     for (ShapeClass shapeClass : ShapeClass.values()) {
       buffers.put(shapeClass, new Buffer());
@@ -193,12 +221,12 @@ public final class TexturedMesher {
         if (cube && quad.cull() != null && hidden(grid, x, y, z, quad.cull())) {
           continue;
         }
-        addQuad(buffer, x, y, z, quad, name, occluded ? cornerLight(grid, x, y, z, quad) : NO_OCCLUSION);
+        addQuad(buffer, x, y, z, quad, name, occluded ? cornerLight(grid, x, y, z, quad, darkening) : NO_OCCLUSION);
       }
     });
     Map<ShapeClass, float[]> meshes = new EnumMap<>(ShapeClass.class);
     buffers.forEach((shapeClass, buffer) -> meshes.put(shapeClass, buffer.toArray()));
-    return new Result(meshes, Set.copyOf(unknown));
+    return new Result(meshes, Set.copyOf(unknown), darkening);
   }
 
   /**
@@ -252,8 +280,10 @@ public final class TexturedMesher {
    *
    * @param meshes        Vertex data for each shape class.
    * @param unknownBlocks Block names that had no usable model and were drawn magenta.
+   * @param occluders     The shape classes whose blocks darkened corners, so the mesh can be rebuilt when that
+   *                      changes.
    */
-  public record Result(Map<ShapeClass, float[]> meshes, Set<String> unknownBlocks) {
+  public record Result(Map<ShapeClass, float[]> meshes, Set<String> unknownBlocks, Set<ShapeClass> occluders) {
   }
 
   /**

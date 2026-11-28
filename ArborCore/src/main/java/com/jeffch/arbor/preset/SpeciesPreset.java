@@ -54,14 +54,15 @@ public record SpeciesPreset(String name, TreeSettings tree, ShapeControl shapeCo
       return this;
     }
     double factor = 1 + TreeRandom.forPath(seed, "tree/sizeVariance").range(-variance, variance);
-    TreeSettings sized = new TreeSettings(tree.sizeScale() * factor, tree.maxHeight(), tree.sink(), tree.roll(), tree.trunkSpread(), 0, tree.ground(), tree.slopeRecovery());
+    TreeSettings sized = new TreeSettings(tree.sizeScale() * factor, tree.maxHeight(), tree.roll(), tree.trunkSpread(), 0, tree.ground(), tree.slopeRecovery());
     return new SpeciesPreset(name, sized, shapeControl, forceList, shapes, blocks, levels, leaves, plantLayers, survival, simple, decorators);
   }
 
   /**
-   * This preset voxelized with survival mode's own settings and blocks.
+   * This preset voxelized with survival mode's own settings and blocks, and its own branch density.
    */
   public SpeciesPreset inSurvival() {
-    return new SpeciesPreset(name, tree, shapeControl, forceList, survival.shapes(), survival.blocks(), levels, leaves, plantLayers, survival, simple, decorators);
+    return new SpeciesPreset(name, tree, shapeControl, forceList, survival.shapes(), survival.blocks(),
+            SimpleAdjuster.branchDensity(levels, survival.branchDensity()), leaves, plantLayers, survival, simple, decorators);
   }
 }

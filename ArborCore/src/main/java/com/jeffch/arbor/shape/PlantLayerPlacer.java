@@ -47,7 +47,7 @@ public final class PlantLayerPlacer {
   }
 
   /**
-   * Places every active layer and returns the names of the layers that are active on this tree.
+   * Places every active layer and returns the layers active on this tree, with the layer that placed each plant.
    *
    * @param skeleton The tree's branches.
    * @param preset   Preset whose plant layers are used.
@@ -56,7 +56,7 @@ public final class PlantLayerPlacer {
    * @param grid     The tree's shapes; plants are added to it.
    * @param budget   Work limit.
    */
-  public static List<String> apply(Skeleton skeleton, SpeciesPreset preset, DensityField density, long seed,
+  public static Placed apply(Skeleton skeleton, SpeciesPreset preset, DensityField density, long seed,
                                    ShapeGrid grid, GenerationBudget budget) {
     return apply(skeleton, preset, density, seed, grid, budget, ShapeGrid.MAX_SHAPES);
   }
@@ -72,7 +72,7 @@ public final class PlantLayerPlacer {
    * @param budget    Work limit.
    * @param maxShapes Most shapes the tree may hold.
    */
-  static List<String> apply(Skeleton skeleton, SpeciesPreset preset, DensityField density, long seed,
+  static Placed apply(Skeleton skeleton, SpeciesPreset preset, DensityField density, long seed,
                             ShapeGrid grid, GenerationBudget budget, int maxShapes) {
     List<PlantLayer> active = new ArrayList<>();
     for (PlantLayer layer : preset.plantLayers()) {
@@ -82,16 +82,17 @@ public final class PlantLayerPlacer {
       }
     }
     if (active.isEmpty() || skeleton.branches().isEmpty()) {
-      return active.stream().map(PlantLayer::name).toList();
+      return new Placed(active.stream().map(PlantLayer::name).toList(), Map.of());
     }
     Scene scene = new Scene(skeleton, preset, density, grid, active.stream().mapToInt(PlantLayer::nearDistance).max().orElse(0));
     budget.charge((double) scene.volume() * active.size());
     scene.measure();
     Map<String, BitSet> nearSets = new HashMap<>();
+    Map<Long, String> placedBy = new HashMap<>();
     for (PlantLayer layer : active) {
-      place(layer, scene, nearSets, seed, grid, budget, maxShapes);
+      place(layer, scene, nearSets, seed, grid, budget, maxShapes, placedBy);
     }
-    return active.stream().map(PlantLayer::name).toList();
+    return new Placed(active.stream().map(PlantLayer::name).toList(), placedBy);
   }
 
   /**
@@ -106,9 +107,10 @@ public final class PlantLayerPlacer {
    * @param grid      The tree's shapes; plants are added to it.
    * @param budget    Work limit.
    * @param maxShapes Most shapes the tree may hold.
+   * @param placedBy  Filled with the layer that placed each plant, by its lowest block.
    */
   private static void place(PlantLayer layer, Scene scene, Map<String, BitSet> nearSets, long seed, ShapeGrid grid,
-                            GenerationBudget budget, int maxShapes) {
+                            GenerationBudget budget, int maxShapes, Map<Long, String> placedBy) {
     String nearKey = layer.nearBranch() + "/" + layer.nearDistance();
     BitSet near = nearSets.get(nearKey);
     if (near == null) {
@@ -159,6 +161,7 @@ public final class PlantLayerPlacer {
           if (isTwoBlock(block) && layer.doubleHalf() != PlantLayer.DoubleHalf.BOTH) {
             grid.put(x, y, z, new Shape.Plant(block,
                     layer.doubleHalf() == PlantLayer.DoubleHalf.TOP ? PlantHalf.UPPER : PlantHalf.LOWER));
+            placedBy.put(ShapeGrid.key(x, y, z), layer.name());
             checkLimit(grid, maxShapes);
             continue;
           }
@@ -166,6 +169,7 @@ public final class PlantLayerPlacer {
             if (grid.get(x, y + 1, z) == null) {
               grid.put(x, y, z, new Shape.Plant(block, PlantHalf.LOWER));
               grid.put(x, y + 1, z, new Shape.Plant(block, PlantHalf.UPPER));
+              placedBy.put(ShapeGrid.key(x, y, z), layer.name());
               checkLimit(grid, maxShapes);
               continue;
             }
@@ -173,6 +177,7 @@ public final class PlantLayerPlacer {
           }
           if (block != null) {
             grid.put(x, y, z, new Shape.Plant(block, PlantHalf.SINGLE));
+            placedBy.put(ShapeGrid.key(x, y, z), layer.name());
             checkLimit(grid, maxShapes);
           }
         }
@@ -188,7 +193,7 @@ public final class PlantLayerPlacer {
    */
   private static void checkLimit(ShapeGrid grid, int maxShapes) {
     if (grid.size() > maxShapes) {
-      throw new GenerationLimitException("preset exceeds the limit of " + maxShapes + " shapes");
+      throw new GenerationLimitException("tree exceeds the limit of " + maxShapes + " shapes");
     }
   }
 
@@ -459,6 +464,29 @@ public final class PlantLayerPlacer {
         }
       }
       return near;
+    }
+  }
+  /**
+   * The plant layers active on one tree, and which of them placed each plant.
+   *
+   * @param active   Names of the active layers, in preset order.
+   * @param placedBy The layer that placed each plant, keyed by the plant's lowest block.
+   */
+  public record Placed(List<String> active, Map<Long, String> placedBy) {
+    /**
+     * How many plants each active layer has in the finished tree, after anything removed later is gone.
+     *
+     * @param grid The finished tree's shapes.
+     */
+    public Map<String, Integer> counts(ShapeGrid grid) {
+      Map<String, Integer> counts = new LinkedHashMap<>();
+      active.forEach(name -> counts.put(name, 0));
+      placedBy.forEach((key, name) -> {
+        if (grid.get(ShapeGrid.keyX(key), ShapeGrid.keyY(key), ShapeGrid.keyZ(key)) instanceof Shape.Plant) {
+          counts.merge(name, 1, Integer::sum);
+        }
+      });
+      return counts;
     }
   }
 }

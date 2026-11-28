@@ -35,7 +35,14 @@ import static com.jeffch.arbor.viewer.UiParts.row;
  * The view controls and readouts.
  */
 final class ControlPanel extends JPanel implements Scrollable {
-  static final Map<String, Set<ShapeClass>> SHOW_GROUPS = showGroups();
+  private static final List<BlockGroup> BLOCK_GROUPS = List.of(
+          new BlockGroup("Solid blocks", "Full blocks, stairs, slabs and buttons",
+                  EnumSet.of(ShapeClass.FULL, ShapeClass.STAIR, ShapeClass.SLAB, ShapeClass.BUTTON)),
+          new BlockGroup("Walls", "Walls", EnumSet.of(ShapeClass.WALL)),
+          new BlockGroup("Fences", "Fences and fence gates", EnumSet.of(ShapeClass.FENCE, ShapeClass.GATE)),
+          new BlockGroup("Plants", "Plants, dead bushes and saplings",
+                  EnumSet.of(ShapeClass.PLANT, ShapeClass.DEAD_BUSH, ShapeClass.SAPLING)),
+          new BlockGroup("Leaves", "Leaf blocks", EnumSet.of(ShapeClass.LEAVES)));
   private static final int SCROLL_UNIT = 18;
   private static final int RANDOM_SEED_LIMIT = 1_000_000;
   private static final int SLIDER_STEPS = 1000;
@@ -46,14 +53,25 @@ final class ControlPanel extends JPanel implements Scrollable {
    * The camera reset and camera help, shown over the top left of the view.
    */
   private final JPanel viewControls = new JPanel();
+  /**
+   * Voxels, Branches, Both and Split: the widest row that cannot wrap, so it sets the panel's narrowest width.
+   */
+  private final JPanel modes = new JPanel(new GridLayout(1, 0));
   private final JTextArea notice = readout(UiParts.WARNING);
-  private final JTextArea forces = readout(UiParts.INFO);
+  private JCheckBox forces;
   private final StatsPanel statsPanel = new StatsPanel();
   private final List<JComponent> voxelControls = new ArrayList<>();
+  private final Map<BlockGroup, JCheckBox> blockBoxes = new HashMap<>();
+  private final Map<BlockGroup, JLabel> blockCounts = new HashMap<>();
+  /**
+   * Block types the current tree has none of.
+   */
+  private final Set<BlockGroup> absent = new HashSet<>();
+  private ViewerState.Mode mode;
   private long seed;
 
   /**
-   * Builds the seed controls, the View, Show and Leaf density sections, and the camera controls that the view shows
+   * Builds the seed controls, the View, Blocks and Guides sections, and the camera controls that the view shows
    * over its top left.
    *
    * @param state       Starting view settings.
@@ -86,60 +104,118 @@ final class ControlPanel extends JPanel implements Scrollable {
     viewControls.add(help);
 
     section("View");
-    JRadioButton voxels = new JRadioButton("Voxels", !state.branchView);
-    JRadioButton branches = new JRadioButton("Branches", state.branchView);
-    ButtonGroup group = new ButtonGroup();
-    group.add(voxels);
-    group.add(branches);
-    voxels.addActionListener(event -> setBranchView(false));
-    branches.addActionListener(event -> setBranchView(true));
-    add(row(voxels, branches));
+    // One choice, so no mix of settings can contradict another.
+    ButtonGroup oneMode = new ButtonGroup();
+    modes.setAlignmentX(Component.LEFT_ALIGNMENT);
+    for (ViewerState.Mode mode : ViewerState.Mode.values()) {
+      String name = mode.name().charAt(0) + mode.name().substring(1).toLowerCase(java.util.Locale.ROOT);
+      JToggleButton button = UiParts.small(new JToggleButton(name, mode == state.mode));
+      button.addActionListener(event -> setMode(mode));
+      oneMode.add(button);
+      modes.add(button);
+    }
+    add(UiParts.capped(modes));
     voxelToggle("Block textures", state.useTextures, (viewer, on) -> viewer.useTextures = on);
+    voxelToggle("Realistic lighting", state.realisticLighting, (viewer, on) -> viewer.realisticLighting = on)
+            .setToolTipText("Sunlight and shadows instead of Minecraft's flat face shading");
     add(notice);
 
-    section("Show");
-    Map<String, JCheckBox> shown = new HashMap<>();
-    SHOW_GROUPS.forEach((label, shapes) -> shown.put(label, voxelToggle(label,
-            state.isVisible(shapes.iterator().next()),
-            (viewer, on) -> shapes.forEach(shape -> viewer.setVisible(shape, on)))));
-    // Unticks Plants and Leaf blocks together, leaving only the trunk and branches; ticking it again shows them.
-    JCheckBox woodOnly = new JCheckBox("Wood only (hide leaves and plants)");
-    woodOnly.setAlignmentX(Component.LEFT_ALIGNMENT);
-    woodOnly.addActionListener(event -> List.of("Plants", "Leaf blocks").forEach(label -> {
-      JCheckBox box = shown.get(label);
-      if (box.isSelected() == woodOnly.isSelected()) {
-        box.doClick();
-      }
-    }));
+    // Shortcuts that set the boxes, rather than a setting of their own that could disagree with them.
+    JButton all = UiParts.small(new JButton("All"));
+    all.addActionListener(event -> BLOCK_GROUPS.forEach(group -> setShown(group, true)));
+    JButton woodOnly = UiParts.small(new JButton("Wood only"));
+    woodOnly.setToolTipText("Hide leaves and plants, leaving the trunk and branches");
+    woodOnly.addActionListener(event -> BLOCK_GROUPS.forEach(group ->
+            setShown(group, Collections.disjoint(group.shapes(), ViewerState.FOLIAGE))));
+    voxelControls.add(all);
     voxelControls.add(woodOnly);
-    add(woodOnly);
-    voxelToggle("Skeleton lines", state.showSkeleton, (viewer, on) -> viewer.showSkeleton = on);
+    JPanel shortcuts = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+    shortcuts.add(all);
+    shortcuts.add(woodOnly);
+    add(Box.createVerticalStrut(8));
+    JPanel header = new JPanel(new BorderLayout());
+    header.add(heading("Blocks"), BorderLayout.WEST);
+    header.add(shortcuts, BorderLayout.EAST);
+    add(UiParts.capped(header));
+    for (BlockGroup group : BLOCK_GROUPS) {
+      Set<ShapeClass> shapes = group.shapes();
+      JCheckBox box = toggle(group.label(), state.isVisible(shapes.iterator().next()),
+              (viewer, on) -> shapes.forEach(shape -> viewer.setVisible(shape, on)));
+      box.setToolTipText(group.tip());
+      JLabel count = new JLabel();
+      count.setForeground(UiParts.MUTED);
+      JPanel line = new JPanel(new BorderLayout());
+      line.add(box, BorderLayout.WEST);
+      line.add(count, BorderLayout.EAST);
+      add(UiParts.capped(line));
+      blockBoxes.put(group, box);
+      blockCounts.put(group, count);
+    }
+
+    section("Guides");
     voxelToggle("Voxel grid", state.showVoxelGrid, (viewer, on) -> viewer.showVoxelGrid = on);
-    add(toggle("Leaf density", state.showDensity, (viewer, on) -> viewer.showDensity = on));
-    add(toggle("Sun and wind", state.showForces, (viewer, on) -> viewer.showForces = on));
+    JCheckBox density = toggle("Leaf density", state.showDensity, (viewer, on) -> viewer.showDensity = on);
+    add(density);
+    // The cloud's sliders sit under its checkbox and show only while the cloud does.
+    JPanel densityPane = new JPanel();
+    densityPane.setName("densityPane");
+    densityPane.setLayout(new BoxLayout(densityPane, BoxLayout.Y_AXIS));
+    densityPane.setBorder(UiParts.BRACKET);
+    densityPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+    densityPane.add(slider("Threshold", 0, 0.95f, state.densityThreshold, (viewer, value) -> viewer.densityThreshold = value));
+    densityPane.add(slider("Opacity", 0.05f, 6, state.densityOpacity, (viewer, value) -> viewer.densityOpacity = value));
+    densityPane.setVisible(state.showDensity);
+    density.addActionListener(event -> densityPane.setVisible(density.isSelected()));
+    add(densityPane);
+    forces = toggle("Sun and wind", state.showForces, (viewer, on) -> viewer.showForces = on);
     add(forces);
     add(toggle("Crown envelope", state.showEnvelope, (viewer, on) -> viewer.showEnvelope = on));
 
-    section("Leaf density");
-    addSlider("Threshold", 0, 0.95f, state.densityThreshold, (viewer, value) -> viewer.densityThreshold = value);
-    addSlider("Opacity", 0.05f, 6, state.densityOpacity, (viewer, value) -> viewer.densityOpacity = value);
-
     statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
     add(statsPanel);
-    setBranchView(state.branchView);
+    setMode(state.mode);
   }
 
   /**
-   * The Show checkboxes. Every shape class belongs to exactly one, so nothing can be left impossible to hide.
+   * Ticks or unticks one block type and applies it.
+   *
+   * @param group Block type.
+   * @param on    Whether to show it.
    */
-  private static Map<String, Set<ShapeClass>> showGroups() {
-    Map<String, Set<ShapeClass>> groups = new LinkedHashMap<>();
-    groups.put("Full blocks", EnumSet.of(ShapeClass.FULL, ShapeClass.STAIR, ShapeClass.SLAB, ShapeClass.BUTTON));
-    groups.put("Walls", EnumSet.of(ShapeClass.WALL));
-    groups.put("Fences", EnumSet.of(ShapeClass.FENCE, ShapeClass.GATE));
-    groups.put("Plants", EnumSet.of(ShapeClass.PLANT, ShapeClass.DEAD_BUSH, ShapeClass.SAPLING));
-    groups.put("Leaf blocks", EnumSet.of(ShapeClass.LEAVES));
-    return groups;
+  private void setShown(BlockGroup group, boolean on) {
+    blockBoxes.get(group).setSelected(on);
+    view.accept(viewer -> group.shapes().forEach(shape -> viewer.setVisible(shape, on)));
+  }
+
+  /**
+   * Greys out what has nothing to act on: block settings in Branches view, and block types the tree has none of.
+   */
+  private void refreshEnabled() {
+    boolean blocks = mode != ViewerState.Mode.BRANCHES;
+    voxelControls.forEach(control -> control.setEnabled(blocks));
+    blockBoxes.forEach((group, box) -> box.setEnabled(blocks && !absent.contains(group)));
+  }
+
+  /**
+   * A bold heading.
+   *
+   * @param title Heading text.
+   */
+  private static JLabel heading(String title) {
+    JLabel label = new JLabel(title);
+    label.setFont(label.getFont().deriveFont(java.awt.Font.BOLD));
+    label.setAlignmentX(Component.LEFT_ALIGNMENT);
+    return label;
+  }
+
+  /**
+   * One Blocks checkbox. Every shape class belongs to exactly one, so nothing can be left impossible to hide.
+   *
+   * @param label  Checkbox text.
+   * @param tip    What it covers.
+   * @param shapes Shape classes it shows or hides.
+   */
+  private record BlockGroup(String label, String tip, Set<ShapeClass> shapes) {
   }
 
   /**
@@ -164,6 +240,15 @@ final class ControlPanel extends JPanel implements Scrollable {
     boolean visible = text != null && !text.isEmpty();
     area.setText(visible ? text : "");
     area.setVisible(visible);
+  }
+
+  /**
+   * As narrow as the view mode buttons allow before their names are cut short.
+   */
+  @Override
+  public Dimension getMinimumSize() {
+    Insets insets = getInsets();
+    return new Dimension(modes.getPreferredSize().width + insets.left + insets.right, super.getMinimumSize().height);
   }
 
   @Override
@@ -230,7 +315,7 @@ final class ControlPanel extends JPanel implements Scrollable {
   /**
    * Shows a new random tree.
    */
-  void randomSeed() {
+  private void randomSeed() {
     setSeed(ThreadLocalRandom.current().nextLong(RANDOM_SEED_LIMIT));
   }
 
@@ -260,13 +345,14 @@ final class ControlPanel extends JPanel implements Scrollable {
   }
 
   /**
-   * Switches between blocks and branch lines; settings that only affect blocks are greyed out in branch view.
+   * Switches what the view draws; settings that only affect blocks are greyed out when there are none.
    *
-   * @param on Whether to show branch lines rather than blocks.
+   * @param mode Blocks, branch lines, both together, or both side by side.
    */
-  private void setBranchView(boolean on) {
-    view.accept(viewer -> viewer.branchView = on);
-    voxelControls.forEach(control -> control.setEnabled(!on));
+  private void setMode(ViewerState.Mode mode) {
+    this.mode = mode;
+    view.accept(viewer -> viewer.mode = mode);
+    refreshEnabled();
   }
 
   /**
@@ -309,7 +395,7 @@ final class ControlPanel extends JPanel implements Scrollable {
    * @param value Starting value.
    * @param apply Sets the view setting.
    */
-  private void addSlider(String label, float min, float max, float value, BiConsumer<ViewerState, Float> apply) {
+  private JComponent slider(String label, float min, float max, float value, BiConsumer<ViewerState, Float> apply) {
     JSlider slider = new JSlider(0, SLIDER_STEPS, Math.round((value - min) / (max - min) * SLIDER_STEPS));
     JLabel shown = new JLabel(String.format("%.2f", value));
     slider.setPreferredSize(new Dimension(150, slider.getPreferredSize().height));
@@ -318,7 +404,7 @@ final class ControlPanel extends JPanel implements Scrollable {
       shown.setText(String.format("%.2f", current));
       view.accept(viewer -> apply.accept(viewer, current));
     });
-    add(row(new JLabel(label), slider, shown));
+    return row(new JLabel(label), slider, shown);
   }
 
   /**
@@ -328,10 +414,7 @@ final class ControlPanel extends JPanel implements Scrollable {
    */
   private void section(String title) {
     add(Box.createVerticalStrut(8));
-    JLabel label = new JLabel(title);
-    label.setFont(label.getFont().deriveFont(java.awt.Font.BOLD));
-    label.setAlignmentX(Component.LEFT_ALIGNMENT);
-    add(label);
+    add(heading(title));
   }
 
   /**
@@ -341,7 +424,19 @@ final class ControlPanel extends JPanel implements Scrollable {
    */
   void showStats(Stats stats) {
     show(notice, stats.textureNotice());
-    show(forces, stats.forces().isEmpty() ? "No sun or wind on this tree" : stats.forces());
+    // Nothing to show on a tree without sun or wind.
+    forces.setEnabled(!stats.forces().isEmpty());
+    forces.setToolTipText(forces.isEnabled() ? null : "No sun or wind on this tree");
+    absent.clear();
+    for (BlockGroup group : BLOCK_GROUPS) {
+      int count = group.shapes().stream().mapToInt(shape -> stats.counts().getOrDefault(shape, 0)).sum();
+      blockCounts.get(group).setText(count == 0 ? "—" : String.format("%,d", count));
+      blockBoxes.get(group).setToolTipText(count == 0 ? "None on this tree" : group.tip());
+      if (count == 0) {
+        absent.add(group);
+      }
+    }
+    refreshEnabled();
     statsPanel.show(stats);
     revalidate();
   }

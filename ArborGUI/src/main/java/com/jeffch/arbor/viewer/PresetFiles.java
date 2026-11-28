@@ -39,9 +39,9 @@ import java.util.Locale;
  * The File menu: new, open, save and exit, with a prompt before unsaved edits are lost. Runs on the Swing thread.
  */
 final class PresetFiles {
-  static final List<String> TEMPLATES = List.of("oak", "apple", "birch", "forest_beech", "spruce",
+  static final List<String> TEMPLATES = List.of("english_oak", "apple", "birch", "forest_beech", "spruce",
           "western_hemlock", "shore_pine", "palm", "willow");
-  private static final String STARTING_TEMPLATE = "oak";
+  private static final String STARTING_TEMPLATE = "english_oak";
   private static final String NEW_NAME = "new_tree";
 
   private final JFrame frame;
@@ -81,7 +81,7 @@ final class PresetFiles {
    *
    * @param name Bundled preset name.
    */
-  private static String templateText(String name) {
+  static String templateText(String name) {
     try (InputStream in = PresetFiles.class.getResourceAsStream("/presets/" + name + ".json")) {
       if (in == null) {
         throw new IllegalStateException("missing bundled preset " + name);
@@ -251,7 +251,7 @@ final class PresetFiles {
       remember(file);
       app.showDocument(opened);
     } catch (PresetException e) {
-      JOptionPane.showMessageDialog(frame, e.getMessage(), "Could not open preset", JOptionPane.ERROR_MESSAGE);
+      JOptionPane.showMessageDialog(frame, e.getMessage(), "Could not open tree design", JOptionPane.ERROR_MESSAGE);
     }
   }
 
@@ -340,7 +340,7 @@ final class PresetFiles {
    */
   private JFileChooser chooser() {
     JFileChooser chooser = new JFileChooser(folder.toAbsolutePath().toFile());
-    chooser.setFileFilter(new FileNameExtensionFilter("Tree presets (*.json)", "json"));
+    chooser.setFileFilter(new FileNameExtensionFilter("Tree designs (*.json)", "json"));
     return chooser;
   }
 

@@ -18,6 +18,8 @@
 
 package com.jeffch.arbor.preset;
 
+import com.jeffch.arbor.math.TreeRandom;
+
 /**
  * Limits branches to a crown shape.
  *
@@ -27,15 +29,23 @@ package com.jeffch.arbor.preset;
  * @param action         What happens at the boundary: cut the branch, or shorten it to fit before it grows.
  * @param steer          How strongly branches near the boundary turn along it instead of outward.
  * @param relativeRadius Whether the radius is a share of the tree's height instead of blocks.
+ * @param lumpiness      How far the crown's edge bulges out and dents in, as a share of the radius; 0 is smooth.
+ * @param lumpSize       Typical width of one bulge, in blocks before size scale.
  */
 public record ShapeControl(Style style, double crownBase, Curve radius, Action action, double steer,
-                           boolean relativeRadius) {
+                           boolean relativeRadius, double lumpiness, double lumpSize) {
   public boolean enabled() {
     return style == Style.ENVELOPE;
   }
 
-  public CrownEnvelope envelope() {
-    return new CrownEnvelope(crownBase, radius, relativeRadius);
+  /**
+   * The crown shape of one tree, whose lumps depend on its seed.
+   *
+   * @param seed Tree seed.
+   */
+  public CrownEnvelope envelope(long seed) {
+    return new CrownEnvelope(crownBase, radius, relativeRadius, lumpiness, lumpSize,
+            Double.doubleToRawLongBits(TreeRandom.forPath(seed, "crown/lumps").nextDouble()));
   }
 
   /**

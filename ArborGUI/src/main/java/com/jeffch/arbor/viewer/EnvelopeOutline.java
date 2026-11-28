@@ -30,7 +30,8 @@ import java.util.function.DoubleFunction;
 
 /**
  * The crown envelope as a wire cage: rings from the crown base to the top and at each point of the radius curve, joined
- * by lines up its sides. Each ring is centred on the trunk at its height, as the generator measures it.
+ * by lines up its sides. Each ring is centred on the trunk at its height, as the generator measures it, and follows the
+ * crown's lumps.
  */
 final class EnvelopeOutline {
   /**
@@ -86,24 +87,25 @@ final class EnvelopeOutline {
     }
     List<double[]> segments = new ArrayList<>();
     for (double y : heights) {
-      double radius = envelope.radiusAt(y, treeHeight, sizeScale);
       double[] shift = trunkShift.apply(y);
-      for (int i = 0; i < RING_SEGMENTS && radius > 0; i++) {
+      for (int i = 0; i < RING_SEGMENTS && envelope.radiusAt(y, treeHeight, sizeScale) > 0; i++) {
         double a = 2 * Math.PI * i / RING_SEGMENTS;
         double b = 2 * Math.PI * (i + 1) / RING_SEGMENTS;
-        segments.add(new double[]{CENTER + shift[0] + Math.cos(a) * radius, y, CENTER + shift[1] + Math.sin(a) * radius,
-                CENTER + shift[0] + Math.cos(b) * radius, y, CENTER + shift[1] + Math.sin(b) * radius});
+        double ra = edge(envelope, y, a, treeHeight, sizeScale);
+        double rb = edge(envelope, y, b, treeHeight, sizeScale);
+        segments.add(new double[]{CENTER + shift[0] + Math.cos(a) * ra, y, CENTER + shift[1] + Math.sin(a) * ra,
+                CENTER + shift[0] + Math.cos(b) * rb, y, CENTER + shift[1] + Math.sin(b) * rb});
       }
     }
     Double previous = null;
     for (double y : heights) {
       if (previous != null) {
-        double low = envelope.radiusAt(previous, treeHeight, sizeScale);
-        double high = envelope.radiusAt(y, treeHeight, sizeScale);
         double[] lowShift = trunkShift.apply(previous);
         double[] highShift = trunkShift.apply(y);
         for (int i = 0; i < SIDE_LINES; i++) {
           double a = 2 * Math.PI * i / SIDE_LINES;
+          double low = edge(envelope, previous, a, treeHeight, sizeScale);
+          double high = edge(envelope, y, a, treeHeight, sizeScale);
           segments.add(new double[]{CENTER + lowShift[0] + Math.cos(a) * low, previous,
                   CENTER + lowShift[1] + Math.sin(a) * low,
                   CENTER + highShift[0] + Math.cos(a) * high, y, CENTER + highShift[1] + Math.sin(a) * high});
@@ -112,5 +114,12 @@ final class EnvelopeOutline {
       previous = y;
     }
     return segments;
+  }
+
+  /**
+   * The crown edge's distance from the trunk line at a height and angle, lumps included.
+   */
+  private static double edge(CrownEnvelope envelope, double y, double angle, double treeHeight, double sizeScale) {
+    return envelope.edgeAt(new Vec3(CENTER + Math.cos(angle), y, CENTER + Math.sin(angle)), treeHeight, sizeScale);
   }
 }

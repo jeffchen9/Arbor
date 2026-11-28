@@ -420,7 +420,7 @@ public final class Decorators {
   private static void put(ShapeGrid grid, int x, int y, int z, Shape shape) {
     grid.put(x, y, z, shape);
     if (grid.size() > ShapeGrid.MAX_SHAPES) {
-      throw new GenerationLimitException("preset exceeds the limit of " + ShapeGrid.MAX_SHAPES + " shapes");
+      throw new GenerationLimitException("tree exceeds the limit of " + ShapeGrid.MAX_SHAPES + " shapes");
     }
   }
 

@@ -378,7 +378,7 @@ public final class DensityGenerator {
       budget.charge(span * span * span);
       splat(cluster, leaf.falloff(), remaining, min, size);
     }
-    CrownEnvelope envelope = preset.shapeControl().enabled() ? preset.shapeControl().envelope() : null;
+    CrownEnvelope envelope = preset.shapeControl().enabled() ? preset.shapeControl().envelope(seed) : null;
     ValueNoise3 noise = new ValueNoise3(TreeRandomSeed.of(seed, "leaves." + index + "#noise"));
     double noiseScale = leaf.noiseScale() * scale;
     float[] density = new float[count];
@@ -497,5 +497,21 @@ public final class DensityGenerator {
       TreeRandom random = TreeRandom.forPath(seed, path);
       return (long) (random.nextDouble() * Long.MAX_VALUE);
     }
+  }
+  /**
+   * How many leaf clusters each leaf generator places on this skeleton, in preset order, without building the field.
+   * Shows whether sparse foliage comes from too few clusters or from clusters too weak to make leaf blocks.
+   *
+   * @param skeleton The tree's branches.
+   * @param preset   Preset exactly as the tree was grown from it.
+   * @param seed     Tree seed.
+   */
+  public static List<Integer> clusterCounts(Skeleton skeleton, SpeciesPreset preset, long seed) {
+    DensityGenerator generator = new DensityGenerator(skeleton, preset, seed, new GenerationBudget());
+    List<Integer> counts = new ArrayList<>();
+    for (int g = 0; g < preset.leaves().size(); g++) {
+      counts.add(skeleton.branches().isEmpty() ? 0 : generator.place(preset.leaves().get(g), g).size());
+    }
+    return counts;
   }
 }

@@ -79,6 +79,9 @@ final class TintColors {
     String n = blockName.substring(blockName.lastIndexOf(':') + 1);
     if (n.equals("spruce_leaves")) return rgb(0x619961);
     if (n.equals("birch_leaves")) return rgb(0x80A755);
+    if (n.equals("mangrove_leaves")) return rgb(0x92C648);
+    // The game draws these with their own colors, though their models ask for a tint.
+    if (n.equals("cherry_leaves") || n.equals("pale_oak_leaves")) return new float[]{1f, 1f, 1f};
     if (n.equals("leaf_litter")) return dry.clone();
     if (n.endsWith("_leaves") || n.equals("vine")) return foliage.clone();
     return grass.clone();

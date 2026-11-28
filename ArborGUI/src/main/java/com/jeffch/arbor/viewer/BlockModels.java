@@ -18,8 +18,8 @@
 
 package com.jeffch.arbor.viewer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.jeffch.arbor.viewer.ModelQuad.Direction3;
 
 import java.io.IOException;
@@ -64,7 +64,7 @@ public final class BlockModels {
    * @param names Receives the property names.
    */
   private static void whenProperties(JsonNode when, Set<String> names) {
-    Iterator<Map.Entry<String, JsonNode>> it = when.fields();
+    Iterator<Map.Entry<String, JsonNode>> it = when.properties().iterator();
     while (it.hasNext()) {
       Map.Entry<String, JsonNode> e = it.next();
       if (e.getKey().equals("OR") || e.getKey().equals("AND")) {
@@ -109,7 +109,7 @@ public final class BlockModels {
    */
   private static boolean whenMatches(JsonNode when, Map<String, String> props) {
     boolean ok = true;
-    Iterator<Map.Entry<String, JsonNode>> it = when.fields();
+    Iterator<Map.Entry<String, JsonNode>> it = when.properties().iterator();
     while (it.hasNext()) {
       Map.Entry<String, JsonNode> e = it.next();
       String k = e.getKey();
@@ -121,7 +121,7 @@ public final class BlockModels {
         for (JsonNode c : e.getValue()) ok &= whenMatches(c, props);
       } else {
         String have = props.get(k);
-        ok &= have != null && List.of(e.getValue().asText().split("\\|")).contains(have);
+        ok &= have != null && List.of(e.getValue().asString().split("\\|")).contains(have);
       }
     }
     return ok;
@@ -137,12 +137,12 @@ public final class BlockModels {
   private static String firstModel(JsonNode state) {
     JsonNode variants = state.get("variants");
     JsonNode chosen = null;
-    if (variants != null && variants.fields().hasNext()) {
-      chosen = first(variants.fields().next().getValue());
-    } else if (state.has("multipart") && state.get("multipart").size() > 0) {
+    if (variants != null && variants.properties().iterator().hasNext()) {
+      chosen = first(variants.properties().iterator().next().getValue());
+    } else if (state.has("multipart") && !state.get("multipart").isEmpty()) {
       chosen = first(state.get("multipart").get(0).get("apply"));
     }
-    return chosen == null || chosen.get("model") == null ? null : chosen.get("model").asText();
+    return chosen == null || chosen.get("model") == null ? null : chosen.get("model").asString();
   }
 
   /**
@@ -470,7 +470,7 @@ public final class BlockModels {
     List<ModelQuad> out = new ArrayList<>();
     JsonNode variants = state.get("variants");
     if (variants != null) {
-      Iterator<Map.Entry<String, JsonNode>> it = variants.fields();
+      Iterator<Map.Entry<String, JsonNode>> it = variants.properties().iterator();
       while (it.hasNext()) {
         Map.Entry<String, JsonNode> e = it.next();
         if (variantMatches(e.getKey(), props)) {
@@ -494,7 +494,7 @@ public final class BlockModels {
       }
       for (String property : named) setsNamedProperty |= props.containsKey(property);
       // A block with no state has nothing to match, so it shows the first part instead of nothing.
-      if (!matched && !named.isEmpty() && !setsNamedProperty && multipart.size() > 0) {
+      if (!matched && !named.isEmpty() && !setsNamedProperty && !multipart.isEmpty()) {
         bake(first(multipart.get(0).get("apply")), out);
       }
     }
@@ -512,7 +512,7 @@ public final class BlockModels {
     while (cur != null && seen.add(cur)) {
       if (cur.equals("block/cross") || cur.equals("block/tinted_cross")) return true;
       JsonNode m = readModel(cur);
-      cur = m.has("parent") ? strip(m.get("parent").asText()) : null;
+      cur = m.has("parent") ? strip(m.get("parent").asString()) : null;
     }
     return false;
   }
@@ -543,16 +543,16 @@ public final class BlockModels {
     Map<String, String> textures = new LinkedHashMap<>();
     JsonNode elements = null;
     Set<String> seen = new HashSet<>();
-    String cur = strip(variant.get("model").asText());
+    String cur = strip(variant.get("model").asString());
     while (cur != null) {
       if (!seen.add(cur)) throw new IOException("parent cycle at " + cur);
       JsonNode m = readModel(cur);
       JsonNode t = m.get("textures");
       if (t != null) {
-        t.fields().forEachRemaining(e -> textures.putIfAbsent(e.getKey(), e.getValue().asText()));
+        t.properties().iterator().forEachRemaining(e -> textures.putIfAbsent(e.getKey(), e.getValue().asString()));
       }
       if (elements == null && m.has("elements")) elements = m.get("elements");
-      cur = m.has("parent") ? strip(m.get("parent").asText()) : null;
+      cur = m.has("parent") ? strip(m.get("parent").asString()) : null;
     }
     if (elements == null) return;
     for (JsonNode el : elements) bakeElement(el, textures, vx, vy, uvlock, out);
@@ -592,7 +592,7 @@ public final class BlockModels {
       for (double[] v : p) for (int i = 0; i < 3; i++) v[i] /= 16;
       if (rot != null) {
         double[] origin = vec(rot.get("origin"));
-        String axis = rot.path("axis").asText("y");
+        String axis = rot.path("axis").asString("y");
         double ang = Math.toRadians(rot.path("angle").asDouble(0));
         double c = Math.cos(ang), s = Math.sin(ang);
         double scale = rot.path("rescale").asBoolean(false) ? 1 / c : 1;
@@ -610,7 +610,7 @@ public final class BlockModels {
       Direction3 cull = null;
       if (face.has("cullface")) {
         try {
-          int cd = Direction3.valueOf(face.get("cullface").asText().toUpperCase()).ordinal();
+          int cd = Direction3.valueOf(face.get("cullface").asString().toUpperCase()).ordinal();
           double[] c = NORMALS[cd].clone();
           variantRotate(c, vx, vy, 0);
           cull = snap(c);
@@ -650,7 +650,7 @@ public final class BlockModels {
         uvs[i * 2 + 1] = (float) c[1];
       }
       out.add(new ModelQuad(pos, uvs, new float[]{(float) n[0], (float) n[1], (float) n[2]},
-              texture(face.get("texture").asText(), textures),
+              texture(face.get("texture").asString(), textures),
               face.path("tintindex").asInt(-1), cull, shade));
     }
   }

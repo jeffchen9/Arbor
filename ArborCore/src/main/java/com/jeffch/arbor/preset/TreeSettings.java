@@ -23,13 +23,12 @@ package com.jeffch.arbor.preset;
  *
  * @param sizeScale     Multiplier on every distance in the preset.
  * @param maxHeight     Height in blocks where branches are cut off.
- * @param sink          Distance in blocks, before size scale, the trunk base starts below ground.
  * @param roll          Rotation of the whole tree around the vertical axis, in degrees.
  * @param trunkSpread   Typical distance in blocks of each trunk from the center when a tree has several.
  * @param sizeVariance  Largest random change to each tree's overall size, as a fraction; 0.15 means 85% to 115%.
  * @param ground        Plane the tree stands on, set in JSON by its normal vector; flat by default.
  * @param slopeRecovery Fraction of the trunk over which it turns from the ground normal back to upright.
  */
-public record TreeSettings(double sizeScale, double maxHeight, double sink, Param roll, double trunkSpread,
+public record TreeSettings(double sizeScale, double maxHeight, Param roll, double trunkSpread,
                            double sizeVariance, GroundPlane ground, double slopeRecovery) {
 }

@@ -18,8 +18,8 @@
 
 package com.jeffch.arbor.viewer;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -198,13 +198,14 @@ final class MinecraftAssets {
       if (json.hasNonNull("inheritsFrom")) {
         return Optional.empty();
       }
-      String type = json.path("type").asText();
+      String type = json.path("type").asString();
       if (!type.equals("release") && !type.equals("snapshot")) {
         return Optional.empty();
       }
-      OffsetDateTime released = OffsetDateTime.parse(json.path("releaseTime").asText());
+      OffsetDateTime released = OffsetDateTime.parse(json.path("releaseTime").asString());
       return Optional.of(new Version(id, jar, type.equals("release"), released));
-    } catch (IOException | DateTimeParseException e) {
+    } catch (tools.jackson.core.JacksonException | DateTimeParseException e) {
+      // Jackson 3 reports unreadable and broken files alike as JacksonException.
       return Optional.empty();
     }
   }

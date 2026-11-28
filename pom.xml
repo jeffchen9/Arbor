@@ -23,7 +23,7 @@
 
     <groupId>com.jeffch.arbor</groupId>
     <artifactId>Arbor</artifactId>
-    <version>1.0.0-SNAPSHOT-2</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
     <name>Arbor</name>
 
@@ -53,14 +53,21 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
+                <groupId>tools.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
-                <version>2.18.2</version>
+                <version>3.3.0</version>
             </dependency>
             <dependency>
                 <groupId>org.pepsoft.jnbt</groupId>
                 <artifactId>JNBT</artifactId>
                 <version>1.0.0</version>
+                <!-- Its Utils library declares Jackson 2 but never uses it; Arbor runs on Jackson 3 alone. -->
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.fasterxml.jackson.core</groupId>
+                        <artifactId>jackson-databind</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.joml</groupId>
@@ -76,6 +83,11 @@
                 <groupId>com.formdev</groupId>
                 <artifactId>flatlaf-extras</artifactId>
                 <version>3.5.4</version>
+            </dependency>
+            <dependency>
+                <groupId>io.modelcontextprotocol.sdk</groupId>
+                <artifactId>mcp</artifactId>
+                <version>2.2.0</version>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>

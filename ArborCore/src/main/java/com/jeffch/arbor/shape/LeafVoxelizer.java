@@ -76,7 +76,7 @@ public final class LeafVoxelizer {
             grid.put(x, y, z, new Shape.Leaves());
           }
           if (grid.size() > ShapeGrid.MAX_SHAPES) {
-            throw new GenerationLimitException("preset exceeds the limit of " + ShapeGrid.MAX_SHAPES + " shapes");
+            throw new GenerationLimitException("tree exceeds the limit of " + ShapeGrid.MAX_SHAPES + " shapes");
           }
         }
       }

@@ -47,12 +47,13 @@ record SliderScale(double low, double high, double step, boolean curved) {
   private static final String TABLE = """
           tree.sizeScale=0.25 4 0.05 ~
           tree.maxHeight=8 128 1 ~
-          tree.sink=-2 8 0.25
           tree.roll=-180 180 5
           tree.trunkSpread=0 16 0.1
           tree.sizeVariance=0 0.5 0.01
           shapeControl.crownBase=0 64 0.5 ~
           shapeControl.steer=0 1 0.05
+          shapeControl.lumpiness=0 1 0.01
+          shapeControl.lumpSize=0.5 32 0.5
           forces.strength=-1 1 0.005 ~
           forces.falloff=0 1 0.01
           forces.directionVariance=0 90 5
@@ -91,6 +92,7 @@ record SliderScale(double low, double high, double step, boolean curved) {
           length.percentOfParent=0 1 0.01
           length.percentOfRadius=0 64 0.5 ~
           length.shapeScale=0 2 0.05
+          length.crownReach=0.05 2 0.05
           levels.segmentLength=0.25 4 0.05 ~
           noise.earlyAmount=0 0.3 0.005
           noise.lateAmount=0 2 0.05
@@ -124,6 +126,7 @@ record SliderScale(double low, double high, double step, boolean curved) {
           shape.curlOut=-10 10 0.1
           shape.zigzag=0 60 1
           shape.zigzagLength=0.5 16 0.1 ~
+          shapes.branchDensity=0.05 3 0.05
           shapes.fullRadius=0 1 0.01
           shapes.wallRadius=0 1 0.01
           shapes.trunkFullRadius=0 1 0.01

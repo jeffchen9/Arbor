@@ -1,0 +1,221 @@
+# What the MCP server (arbor mcp) tells the assistant: its instructions, each tool's description, each argument's
+# description, replies and errors. A line "== key" starts a piece of text; the lines under it are joined with spaces,
+# so line breaks and blank lines don't matter. A key "tool.argument" is that tool's own wording for an argument; a bare
+# argument key is shared by every tool that has no wording of its own. Lines starting with # are skipped.
+
+== instructions
+To build a tree that matches an image, start from scratch:
+1) new_design with no template gives a tree design with one bare trunk;
+2) read_design on a built-in species (from bundled_presets) shows how levels, leaves and blocks are written, as an
+example only;
+3) build the tree yourself in one edit_design call: set the whole "levels" section (the trunk, then each order of
+branches), then "leaves" and "blocks", and add any forces (sun, wind) or decorators (pinecones, vines, moss) the photo
+shows;
+4) call render, which shows front, side, three-quarter and top views, and compare the view that matches the photo's
+angle (and the others for depth); use render_closeup to look at one part, such as the trunk base or the crown's edge,
+up close;
+5) refine with describe_settings, which explains every setting and its unit, and edit_design, changing a few settings
+per round, and render again until they match; use compare to try several values of one setting at once, undo to take
+back an edit that made things worse, and list_blocks to check block names; choose blocks by their real colors from
+block_colors, never by their names; a suggestion for plant layers in the foliage: short_grass or tall_grass often
+suits deciduous (broadleaf) trees and fern or large_fern coniferous ones, but follow the photo or the user when they
+call for something else;
+6) call render_variations to see the same tree design on other seeds: pick the seed closest to the photo, and if the
+trees differ too much, lower the variance settings so the match is not one lucky seed.
+Only if building from scratch cannot get close, call new_design with the nearest built-in species as its template and
+refine that.
+
+# Arguments shared by several tools
+
+== file
+Tree design JSON file. Absolute, or relative to the folder the server was started in.
+
+== seed
+Tree seed (whole number). The same tree design and seed always give the same tree. Keep it fixed while matching an
+image, so only your edits change the tree. Defaults to 1.
+
+== high_detail
+Draw at twice the width and height, for small details such as single branches, leaf gaps or the trunk's base. Costs
+about four times as many image tokens, so leave it out unless the normal image is not detailed enough. Defaults to
+false.
+
+== wireframe
+Draw only the branch skeleton, as thin lines colored by branch level, with no blocks or leaves. Shows the branching
+structure that foliage hides: how many branches, where they start, their angles and how they bend. A key under the
+image names each level's color, with its branch count where the image shows one tree. Defaults to false.
+
+# Tools, in the order the server lists them
+
+== bundled_presets
+Lists the built-in species (oak, birch, spruce, …). Read one with read_design to see how a complete tree is written;
+copy one with new_design only if building from scratch cannot get close.
+
+== new_design
+Creates a new tree design. With no template it is a tree from scratch: one bare trunk for you to add branch levels,
+leaves and blocks to. Start here when matching an image. With a template it copies that built-in species instead.
+Refuses to overwrite an existing file.
+
+== new_design.template
+Leave out to start from scratch. Otherwise a name from bundled_presets to copy.
+
+== describe_settings
+Lists every setting of a tree design: path, readable name, unit, kind, allowed range or options, current value, and
+what it does in plain words. Change the simple.* settings first (overall height, crown width, trunk thickness, branch
+density, branch angle, droop, twist, leaf fullness); use the finer level settings only when those cannot get closer.
+
+== read_design
+Returns a tree design's full JSON. Give a built-in species name (such as oak) instead of a file to see a complete
+example of how levels, leaves and blocks are written.
+
+== read_design.file
+Tree design JSON file (absolute, or relative to the folder the server was started in), or a name from
+bundled_presets.
+
+== set_setting
+Sets one setting, or a whole section, and saves the file. To build a tree from scratch, set the whole "levels" array
+(the trunk first, then each order of branches), then "leaves" and "blocks", written like the built-in species.
+Rejects invalid values and leaves the file unchanged. When refining, change only a few settings between renders, so
+you can tell what each one did.
+
+== set_setting.path
+Setting path from describe_settings, for example simple.height or levels[1].angle.down, or a whole section such as
+levels, leaves or blocks.
+
+== set_setting.json
+New value as JSON: a number like 1.4, a string in quotes like "oak_log", true or false, an object, or an array for a
+whole section.
+
+== edit_design
+Makes several edits in one call and saves once: set or reset settings, and add or remove levels, forces, leaves, plant
+layers and decorators. Changes run in order, so a change can edit a part an earlier one added. Each change must leave
+the design valid; if one fails, the error names it and nothing is saved. The reply names every part it added and its
+path, such as forces[1].
+
+== edit_design.changes
+The changes, in order. Each is one of:
+{"set": path, "value": any JSON} sets a setting or whole section (paths as in describe_settings);
+{"reset": path} returns a setting to its default;
+{"add": "level"} adds a finer branch level, copied from the finest one;
+{"remove": "level"} removes the finest level (never the trunk), moving its leaves to its parent;
+{"add": "force", "kind": "sun"|"wind"|"direction"|"attractor"|"curl"}, or {"remove": "force", "index": n}, which also
+removes every level's response to it;
+{"add": "leaves", "parent": level name} adds a leaf cluster set (on the finest level if parent is left out), or
+{"remove": "leaves", "index": n};
+{"add": "plant_layer"} adds a layer of short grass (a suggestion: grass or tall_grass often suits deciduous trees, and
+fern or large_fern coniferous ones), or {"remove": "plant_layer", "index": n};
+{"add": "decorator", "kind": "pinecones"|"vines"|"moss"} or {"remove": "decorator", "kind": ...}.
+
+== generate
+Builds the tree and describes it in numbers: size in blocks; where the crown starts (the lowest foliage as a share of
+the height); the crown's width and its width against its own height; trunk width at breast height; how much of the
+foliage is in the top half; and the blocks by type; then where they come from: branches and wood blocks per branch
+level, leaf clusters per leaf generator with the branches they grow on, and plants per plant layer. When a part
+shrinks or vanishes, these show which level, cluster set or layer lost it. Compare these with what the photo shows,
+e.g. a clear trunk for half the height or a crown twice as wide as tall. Faster than render; use it to check that a
+change worked.
+
+== render
+Builds the tree and returns one image with four labelled views: front, side, three-quarter and top, all at the same
+scale. Compare the view that matches the reference photo's angle, and use the others to check depth and crown spread.
+Takes a few seconds.
+
+== render.reply
+Front, side, three-quarter and top views.
+
+== render_closeup
+Renders one part of the tree up close, so details render's small views cannot show become visible: the trunk's base
+and flare, how branches join, single branch tips, leaf gaps, plants and decorators. Pick a window as fractions of the
+tree as it fills that view in render's image (0 to 1 from its bottom to top and left to right edge): read where the
+part is in render's image, for example bottom 0, top 0.2 and left and right 0.1 either side of the trunk for the
+trunk's base, or bottom 0.6, top 1 for the upper crown. Same image size as one render view; things nearer the camera
+can hide the window. Takes a few seconds.
+
+== render_closeup.view
+Which of render's four views to look from. Defaults to front.
+
+== render_closeup.bottom
+Lower edge of the window, from 0 (the bottom of the tree in this view) to 1 (its top). In the top view, 0 is the near
+side and 1 the far side. Defaults to 0.
+
+== render_closeup.top
+Upper edge of the window, from 0 to 1, above bottom. Defaults to 1.
+
+== render_closeup.left
+Left edge of the window, from 0 (the tree's left edge in this view) to 1 (its right edge). Defaults to 0.
+
+== render_closeup.right
+Right edge of the window, from 0 to 1, right of left. Defaults to 1.
+
+== render_variations
+Renders the same tree design with several seeds side by side, all from the front at one scale, each labelled with its
+seed. Each seed is a different tree from the same settings. Use it to see how much the trees vary, to pick the seed
+that comes closest to the photo, and to check that a match is not one lucky seed: if the trees differ too much, lower
+the randomness (variance) settings.
+
+== render_variations.seed
+First seed; the others follow it (seed, seed+1, …). Defaults to 1.
+
+== render_variations.count
+How many trees, 2 to 9. Defaults to 4.
+
+== compare
+Shows what one setting does: renders the tree with each value side by side, all from the front on the same seed and
+at one scale, each labelled with its value, and gives the generate numbers for each. The file is not changed. Use it
+instead of an edit and a render per value when you are unsure which value fits, for example values [0.3, 0.5, 0.7]
+for a leaf density.
+
+== compare.path
+Setting path from describe_settings, such as leaves[0].strength.
+
+== compare.values
+2 to 9 values to try, each written as for edit_design
+
+== undo
+Takes back the newest edits made with set_setting or edit_design, restoring the file as it was before them. Use it
+when an idea made the tree worse, instead of reversing it setting by setting. Remembers the last 50 edits per file
+while the server runs; refuses if the file was changed some other way since, such as in the editor.
+
+== undo.steps
+How many edits to take back, newest first. Defaults to 1.
+
+== list_blocks
+Lists the block names in the Minecraft version installed on this computer, the one the editor draws with, that
+contain some text. Use it to check a name before using it, such as text log, leaves, _wall, fence, sapling or grass.
+Edits and generate also warn about block names that version does not have.
+
+== list_blocks.text
+Text the names must contain. Leave out to list every block.
+
+== block_colors
+Gives the real colors of blocks, averaged from their textures in the Minecraft version the editor uses, as hex and
+plain words, with a log's bark and cut end apart. Block names are a poor guide to color (pale oak is nearly white and
+gray; dark oak is dark brown), so look up the candidates here and pick the ones whose colors match the photo.
+
+== block_colors.text
+Text the block names must contain, such as _log, planks, _wall, fence or leaves.
+
+== export
+Writes trees from this tree design as Minecraft structure files, each with a different seed. At most 1000 per call.
+
+== export.count
+Number of trees, 1 to 1000.
+
+== export.folder
+Output folder. Optional; defaults to a folder named after the tree design.
+
+# Errors. %s is the argument's name.
+
+== error.required
+%s is required
+
+== error.whole
+%s must be a whole number
+
+== error.too_large
+%s is too large
+
+== error.number
+%s must be a number
+
+== error.runaway
+the tree is too large or too deeply branched; reduce counts, lengths or sizes

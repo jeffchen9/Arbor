@@ -155,11 +155,11 @@ public final class SkeletonGenerator {
         return;
       }
       if (all.size() >= NodePlacer.MAX_BRANCHES) {
-        throw new GenerationLimitException("preset exceeds the limit of " + NodePlacer.MAX_BRANCHES + " branches");
+        throw new GenerationLimitException("tree exceeds the limit of " + NodePlacer.MAX_BRANCHES + " branches");
       }
       nodeCount += nodes.get().size();
       if (nodeCount > SpineBuilder.MAX_NODES) {
-        throw new GenerationLimitException("preset exceeds the limit of " + SpineBuilder.MAX_NODES + " spine nodes");
+        throw new GenerationLimitException("tree exceeds the limit of " + SpineBuilder.MAX_NODES + " spine nodes");
       }
       Branch branch = new Branch(index, level.name(), path, parent == null ? null : parent.branch().pathId(),
               placement.t(), nodes.get());

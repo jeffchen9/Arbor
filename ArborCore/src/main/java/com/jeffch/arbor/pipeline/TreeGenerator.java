@@ -30,6 +30,7 @@ import com.jeffch.arbor.skeleton.Skeleton;
 import com.jeffch.arbor.skeleton.SkeletonGenerator;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Runs the full generation pipeline for one preset and seed.
@@ -49,29 +50,29 @@ public final class TreeGenerator {
    */
   public static GeneratedTree generate(SpeciesPreset species, long seed) {
     long start = System.nanoTime();
-    SpeciesPreset sized = SimpleAdjuster.apply(species).forSeed(seed);
-    boolean survival = sized.shapes().survival();
-    SpeciesPreset preset = survival ? sized.inSurvival() : sized;
+    SpeciesPreset preset = effective(species, seed);
+    boolean survival = preset.shapes().survival();
     GenerationBudget budget = new GenerationBudget();
     Skeleton skeleton = SkeletonGenerator.generate(preset, seed, budget);
     DensityField density = DensityGenerator.generate(skeleton, preset, seed, budget);
     TreeBlocks blocks = TreeBlocks.pick(preset.blocks(), seed);
     ShapeAvailability availability = survival ? ShapeAvailability.survival() : ShapeAvailability.of(blocks);
     ShapeGrid shapes = new ShapeGrid();
-    List<String> plantLayers = List.of();
+    PlantLayerPlacer.Placed plants = new PlantLayerPlacer.Placed(List.of(), Map.of());
     if (!skeleton.branches().isEmpty()) {
       WoodVoxelizer.apply(skeleton, preset, seed, shapes, budget, density, availability);
       LeafVoxelizer.apply(density, preset.shapes(), seed, shapes, budget, availability);
       if (survival) {
         SurvivalBlocks.addFoliageSpines(shapes, skeleton, preset);
       } else {
-        plantLayers = PlantLayerPlacer.apply(skeleton, preset, density, seed, shapes, budget);
+        plants = PlantLayerPlacer.apply(skeleton, preset, density, seed, shapes, budget);
       }
       // Nothing goes below the ground, flat or sloped, such as long hanging strands.
       shapes.removeIf(preset.tree().ground()::buries);
       if (survival) {
         SurvivalBlocks.finish(shapes, skeleton);
-      } else if (preset.shapes().removeDetached()) {
+      } else {
+        // Nothing floats: whatever cannot reach a trunk through touching blocks, corners included, goes.
         DetachedBlocks.apply(shapes, skeleton);
       }
       WallResolver.apply(shapes);
@@ -81,10 +82,21 @@ public final class TreeGenerator {
       if (!survival) {
         Decorators.apply(shapes, decorators, preset.tree().ground(), seed,
                 decorators.pinecones().enabled() && decorators.pinecones().minLevel() > 0
-                        ? BranchLevels.of(shapes, skeleton) : java.util.Map.of());
+                        ? BranchLevels.of(shapes, skeleton) : Map.of());
       }
     }
-    return new GeneratedTree(seed, skeleton, shapes, density, System.nanoTime() - start, blocks, plantLayers,
+    return new GeneratedTree(seed, skeleton, shapes, density, System.nanoTime() - start, blocks, plants.counts(shapes),
             preset.tree().ground());
+  }
+  /**
+   * The preset exactly as one seed's tree is grown from it: Simple sliders, this seed's size variety, and Survival's own
+   * settings when the tree is in survival mode.
+   *
+   * @param species Preset as written.
+   * @param seed    Tree seed.
+   */
+  public static SpeciesPreset effective(SpeciesPreset species, long seed) {
+    SpeciesPreset sized = SimpleAdjuster.apply(species).forSeed(seed);
+    return sized.shapes().survival() ? sized.inSurvival() : sized;
   }
 }

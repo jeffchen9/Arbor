@@ -30,8 +30,9 @@ import java.util.function.Predicate;
  *
  * @param shapes Voxelizer settings used in survival mode.
  * @param blocks Log, six-sided and leaf choices used in survival mode.
+ * @param branchDensity Multiplier on the number of branches in survival mode, where every branch is a log.
  */
-public record SurvivalSettings(VoxelSettings shapes, BlockSettings blocks) {
+public record SurvivalSettings(VoxelSettings shapes, BlockSettings blocks, double branchDensity) {
   private static final Set<String> TREE_FAMILIES = Set.of("oak", "spruce", "birch", "jungle", "acacia", "dark_oak",
           "mangrove", "cherry", "pale_oak");
   private static final Set<String> NETHER_FAMILIES = Set.of("crimson", "warped");

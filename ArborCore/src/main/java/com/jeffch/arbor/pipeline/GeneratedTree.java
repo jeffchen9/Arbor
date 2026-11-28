@@ -24,7 +24,7 @@ import com.jeffch.arbor.shape.ShapeGrid;
 import com.jeffch.arbor.shape.TreeBlocks;
 import com.jeffch.arbor.skeleton.Skeleton;
 
-import java.util.List;
+import java.util.Map;
 
 /**
  * Everything produced for one preset and seed.
@@ -35,12 +35,12 @@ import java.util.List;
  * @param density         3D leaf density field.
  * @param generationNanos Time the pipeline took, in nanoseconds.
  * @param blocks          Block chosen for each role on this tree.
- * @param plantLayers     Names of the plant layers active on this tree.
+ * @param plants          Plants in the finished tree from each plant layer active on it, in preset order.
  * @param ground          Plane this tree stands on.
  */
 public record GeneratedTree(long seed, Skeleton skeleton, ShapeGrid shapes, DensityField density, long generationNanos,
-                            TreeBlocks blocks, List<String> plantLayers, GroundPlane ground) {
+                            TreeBlocks blocks, Map<String, Integer> plants, GroundPlane ground) {
   public GeneratedTree(long seed, Skeleton skeleton, ShapeGrid shapes, DensityField density, long generationNanos) {
-    this(seed, skeleton, shapes, density, generationNanos, TreeBlocks.oakDefaults(), List.of(), GroundPlane.FLAT);
+    this(seed, skeleton, shapes, density, generationNanos, TreeBlocks.oakDefaults(), Map.of(), GroundPlane.FLAT);
   }
 }

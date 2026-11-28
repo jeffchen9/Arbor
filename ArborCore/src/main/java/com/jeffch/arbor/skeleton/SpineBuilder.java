@@ -100,11 +100,11 @@ public final class SpineBuilder {
             ? rootFrame(preset, request.resolver())
             : request.parent().frame(parentT);
     attach = request.parent() == null
-            ? onGround(BASE.add(new Vec3(0, -preset.tree().sink() * scale, 0)).add(trunkOffset()))
+            ? onGround(BASE.add(trunkOffset()))
             : request.parent().point(parentT);
     ShapeControl control = preset.shapeControl();
     usesEnvelope = control.enabled() && request.levelIndex() != 0 && !exemptFromEnvelope();
-    envelope = control.envelope();
+    envelope = control.envelope(request.seed());
   }
 
   /**
@@ -310,7 +310,7 @@ public final class SpineBuilder {
     request.budget().charge(length / (level.segmentLength() * scale));
     int segments = Math.max(1, (int) Math.min(MAX_NODES + 1.0, Math.ceil(length / (level.segmentLength() * scale))));
     if (segments > MAX_NODES) {
-      throw new GenerationLimitException("preset exceeds the limit of " + MAX_NODES + " spine nodes");
+      throw new GenerationLimitException("tree exceeds the limit of " + MAX_NODES + " spine nodes");
     }
     double step = length / segments;
     Vec3[] points = grow(start, segments, step);
@@ -461,12 +461,12 @@ public final class SpineBuilder {
   }
 
   /**
-   * Whether a point lies inside the crown envelope, measured around the trunks' center line.
+   * Whether a point lies inside this level's reach of the crown envelope, measured around the trunks' center line.
    *
    * @param point Point to check.
    */
   private boolean insideEnvelope(Vec3 point) {
-    return envelope.contains(centered(point), request.treeHeight(), scale);
+    return envelope.contains(centered(point), request.treeHeight(), scale, level.length().crownReach());
   }
 
   /**
@@ -638,7 +638,7 @@ public final class SpineBuilder {
     if (!usesEnvelope || steer <= 0) {
       return heading;
     }
-    double limit = envelope.radiusAt(point.y(), request.treeHeight(), scale);
+    double limit = envelope.edgeAt(centered(point), request.treeHeight(), scale) * level.length().crownReach();
     if (limit <= 0) {
       return heading;
     }

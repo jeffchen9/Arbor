@@ -24,7 +24,7 @@
     <parent>
         <groupId>com.jeffch.arbor</groupId>
         <artifactId>Arbor</artifactId>
-        <version>1.0.0-SNAPSHOT-2</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>ArborCore</artifactId>
@@ -33,7 +33,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>

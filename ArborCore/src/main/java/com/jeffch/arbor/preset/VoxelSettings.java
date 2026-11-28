@@ -49,7 +49,6 @@ package com.jeffch.arbor.preset;
  * @param voxelRandomness        Overall irregularity of shape thresholds and branch tips, from 0 to 1.
  * @param leafBlockDensity       Leaf density needed for a full leaf block; 0 places no leaf blocks.
  * @param trimToCanopy           Whether walls and fences stop at the last point with leaves at or above them.
- * @param removeDetached         Whether blocks with no chain of touching blocks back to a trunk are removed.
  * @param survival               Whether the tree uses only logs, wood and naturally decaying leaves.
  */
 public record VoxelSettings(
@@ -81,7 +80,6 @@ public record VoxelSettings(
         double voxelRandomness,
         double leafBlockDensity,
         boolean trimToCanopy,
-        boolean removeDetached,
         boolean survival) {
 
   /**
@@ -103,6 +101,6 @@ public record VoxelSettings(
                             double leafDensity) {
     return new VoxelSettings(full, wall, 0, 1, 0, 0, 0, implied, leafSize, leafStrength, 0, deadBushDensity, 0,
             false, smoothStairDepth, smoothSlabDepth, smoothWallDepth, smoothFenceDepth, 0, buttonSpacing, tipDensity,
-            0, 0, trunkFull, saplingLeafDensity, randomness, leafDensity, trim, true, true);
+            0, 0, trunkFull, saplingLeafDensity, randomness, leafDensity, trim, true);
   }
 }

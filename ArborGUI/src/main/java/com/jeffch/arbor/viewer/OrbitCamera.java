@@ -135,4 +135,19 @@ public final class OrbitCamera {
   public float pitch() {
     return pitch;
   }
+
+  public float yaw() {
+    return yaw;
+  }
+
+  /**
+   * Looks from a set direction, as the screenshot views do.
+   *
+   * @param yaw   Degrees around the tree.
+   * @param pitch Degrees above the horizon, kept short of straight up or down.
+   */
+  public void turnTo(float yaw, float pitch) {
+    this.yaw = yaw;
+    this.pitch = Math.clamp(pitch, -MAX_PITCH, MAX_PITCH);
+  }
 }

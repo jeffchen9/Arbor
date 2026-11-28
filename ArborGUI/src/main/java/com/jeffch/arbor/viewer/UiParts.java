@@ -34,6 +34,22 @@ final class UiParts {
   static final Color WARNING = new Color(235, 180, 85);
   static final Color INFO = new Color(105, 190, 230);
   static final Color ACCENT = new Color(75, 160, 255);
+  /**
+   * An L-shaped line down the left of an open sub-pane, so its rows read as part of the control above.
+   */
+  static final javax.swing.border.Border BRACKET = new javax.swing.border.AbstractBorder() {
+    @Override
+    public Insets getBorderInsets(Component component) {
+      return new Insets(2, 16, 8, 0);
+    }
+
+    @Override
+    public void paintBorder(Component component, Graphics g, int x, int y, int width, int height) {
+      g.setColor(ACCENT);
+      g.fillRect(x + 5, y, 2, height - 4);
+      g.fillRect(x + 5, y + height - 4, 9, 2);
+    }
+  };
 
   private UiParts() {
   }
@@ -73,6 +89,129 @@ final class UiParts {
     component.setAlignmentX(Component.LEFT_ALIGNMENT);
     component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
     return component;
+  }
+
+  /**
+   * Whether one side of a split pane is open, that is, the divider is not pushed against that edge.
+   *
+   * @param pane The split pane.
+   * @param left The left side, or else the right.
+   */
+  static boolean sideShown(JSplitPane pane, boolean left) {
+    int location = pane.getDividerLocation();
+    return left ? location > pane.getInsets().left + 4 : location < collapsedRight(pane) - 4;
+  }
+
+  /**
+   * Opens or closes one side of a split pane. Opening goes back to where the divider was, or to {@code width} when
+   * that was itself closed.
+   *
+   * @param pane  The split pane.
+   * @param left  The left side, or else the right.
+   * @param show  Whether to open it.
+   * @param width The side's width when there is no earlier one to go back to.
+   */
+  static void showSide(JSplitPane pane, boolean left, boolean show, int width) {
+    if (show == sideShown(pane, left)) {
+      return;
+    }
+    if (!show) {
+      pane.setDividerLocation(left ? pane.getInsets().left : collapsedRight(pane));
+      return;
+    }
+    int last = pane.getLastDividerLocation();
+    boolean lastShown = left ? last > pane.getInsets().left + 4 : last > 0 && last < collapsedRight(pane) - 4;
+    pane.setDividerLocation(lastShown ? last : left ? width : collapsedRight(pane) - width);
+  }
+
+  /**
+   * Whether one side of a split pane is open. Ticking it opens the side and unticking closes it, and dragging the
+   * divider to the edge or away from it ticks or unticks it, so the edge button and menu always show the truth.
+   *
+   * @param pane  The split pane.
+   * @param left  The left side, or else the right.
+   * @param width The side's width when it opens with no earlier width.
+   */
+  static ButtonModel sideModel(JSplitPane pane, boolean left, int width) {
+    ButtonModel model = new JToggleButton.ToggleButtonModel();
+    model.setSelected(true);
+    model.addItemListener(event -> showSide(pane, left, model.isSelected(), width));
+    pane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY,
+            event -> model.setSelected(sideShown(pane, left)));
+    return model;
+  }
+
+  private static int collapsedRight(JSplitPane pane) {
+    return pane.getWidth() - pane.getDividerSize() - pane.getInsets().right;
+  }
+
+  /**
+   * A tool window button as IntelliJ draws them on a window edge: an upright icon, then the label turned to run along
+   * the edge. It is lit while its panel is open.
+   */
+  static final class EdgeButton extends JToggleButton {
+    private static final int PAD = 8;
+    private static final int GAP = 5;
+    private final boolean clockwise;
+
+    /**
+     * @param text      Label.
+     * @param icon      Icon, drawn upright before the label.
+     * @param clockwise Whether the label reads top to bottom, as on a right edge; otherwise bottom to top.
+     * @param model     Whether the panel is open, shared with its menu item.
+     */
+    EdgeButton(String text, Icon icon, boolean clockwise, ButtonModel model) {
+      super(text, icon);
+      this.clockwise = clockwise;
+      setModel(model);
+      setFocusable(false);
+      setRolloverEnabled(true);
+      setContentAreaFilled(false);
+      setBorderPainted(false);
+      setToolTipText("Show or hide the " + text.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+      FontMetrics metrics = getFontMetrics(getFont());
+      int across = Math.max(metrics.getHeight(), getIcon().getIconWidth()) + 2 * GAP;
+      int along = 2 * PAD + getIcon().getIconHeight() + GAP + metrics.stringWidth(getText());
+      return new Dimension(across, along);
+    }
+
+    @Override
+    public Dimension getMaximumSize() {
+      return getPreferredSize();
+    }
+
+    @Override
+    protected void paintComponent(Graphics graphics) {
+      Graphics2D g = (Graphics2D) graphics.create();
+      g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+      if (isSelected() || getModel().isRollover()) {
+        g.setColor(new Color(255, 255, 255, isSelected() ? 38 : 18));
+        g.fillRoundRect(1, 1, getWidth() - 2, getHeight() - 2, 8, 8);
+      }
+      Icon icon = getIcon();
+      int iconX = (getWidth() - icon.getIconWidth()) / 2;
+      int iconY = clockwise ? PAD : getHeight() - PAD - icon.getIconHeight();
+      icon.paintIcon(this, g, iconX, iconY);
+      g.setFont(getFont());
+      g.setColor(isSelected() ? getForeground() : MUTED);
+      FontMetrics metrics = g.getFontMetrics();
+      int start = PAD + icon.getIconHeight() + GAP;
+      if (clockwise) {
+        g.translate(getWidth(), 0);
+        g.rotate(Math.PI / 2);
+      } else {
+        g.translate(0, getHeight());
+        g.rotate(-Math.PI / 2);
+      }
+      int baseline = (getWidth() - metrics.getHeight()) / 2 + metrics.getAscent();
+      g.drawString(getText(), start, baseline);
+      g.dispose();
+    }
   }
 
   /**

@@ -18,10 +18,10 @@
 
 package com.jeffch.arbor.preset;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.*;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -105,10 +105,10 @@ public final class PresetDocument {
    */
   private static Map<String, List<String>> voxelGroups() {
     Map<String, List<String>> groups = new LinkedHashMap<>();
-    groups.put("Wood thickness", List.of("fullRadius", "trunkFullRadius", "wallRadius", "wallGapChance", "thinCoverage"));
+    groups.put("Branch blocks", List.of("branchDensity", "fullRadius", "wallRadius", "trunkFullRadius", "wallGapChance", "thinCoverage"));
     groups.put("Fence gates", List.of("gateChance", "gateInWallChance", "openGateChance"));
     groups.put("Fine and implied branches", List.of("impliedRadius", "impliedLeafSize", "impliedLeafStrength",
-            "fineBranchChance", "fineGateChance", "tipCanopyDensity", "trimToCanopy", "removeDetached"));
+            "fineBranchChance", "fineGateChance", "tipCanopyDensity", "trimToCanopy"));
     groups.put("Branch clusters", List.of("deadBushChance", "deadBushDensity", "deadBushOffFenceChance",
             "saplingLeafDensity"));
     groups.put("Trunk smoothing", List.of("smoothTrunk", "smoothStairDepth", "smoothSlabDepth", "smoothWallDepth",
@@ -135,7 +135,7 @@ public final class PresetDocument {
    */
   private static String newLevelName(ArrayNode levels) {
     List<String> names = new ArrayList<>();
-    levels.forEach(level -> names.add(level.path("name").asText()));
+    levels.forEach(level -> names.add(level.path("name").asString()));
     int number = levels.size() + 1;
     while (names.contains("level" + number)) {
       number++;
@@ -151,7 +151,7 @@ public final class PresetDocument {
    * @param name New level name.
    */
   private static void renameRuleLevel(JsonNode rule, String old, String name) {
-    if (rule instanceof ObjectNode object && "level".equals(object.path("rule").asText())
+    if (rule instanceof ObjectNode object && "level".equals(object.path("rule").asString())
             && object.get("levels") instanceof ObjectNode levels && levels.has(old)) {
       ObjectNode renamed = JsonNodeFactory.instance.objectNode();
       levels.properties().forEach(entry ->
@@ -172,7 +172,7 @@ public final class PresetDocument {
       return "A name is required.";
     }
     for (int i = 0; i < items.size(); i++) {
-      if (i != index && name.equals(items.get(i).path("name").asText())) {
+      if (i != index && name.equals(items.get(i).path("name").asString())) {
         return "\"" + name + "\" is already used.";
       }
     }
@@ -190,8 +190,8 @@ public final class PresetDocument {
   private static void replaceReferences(JsonNode items, String key, String old, String name) {
     if (items instanceof ArrayNode list) {
       for (JsonNode item : list) {
-        if (item instanceof ObjectNode object && object.path(key).isTextual()
-                && old.equals(object.get(key).asText())) {
+        if (item instanceof ObjectNode object && object.path(key).isString()
+                && old.equals(object.get(key).asString())) {
           object.put(key, name);
         }
       }
@@ -235,7 +235,7 @@ public final class PresetDocument {
    */
   private static List<String> layerNames(ArrayNode layers) {
     List<String> names = new ArrayList<>();
-    layers.forEach(layer -> names.add(layer.path("name").asText()));
+    layers.forEach(layer -> names.add(layer.path("name").asString()));
     return names;
   }
 
@@ -555,7 +555,7 @@ public final class PresetDocument {
    */
   private String nameAt(String path) {
     JsonNode name = value(path);
-    return name == null || name.asText().isBlank() ? "(unnamed)" : name.asText();
+    return name == null || name.asString().isBlank() ? "(unnamed)" : name.asString();
   }
 
   public int levelCount() {
@@ -574,7 +574,7 @@ public final class PresetDocument {
       added.putObject("length").put("percentOfParent", 0.5);
       added.putObject("radius").put("percentOfParent", 0.6);
     } else {
-      ObjectNode copy = levels.get(levels.size() - 1).deepCopy();
+      ObjectNode copy = (ObjectNode) levels.get(levels.size() - 1).deepCopy();
       copy.remove(List.of("name", "parent", "flares"));
       added.setAll(copy);
     }
@@ -591,19 +591,19 @@ public final class PresetDocument {
       return;
     }
     JsonNode removed = levels.get(levels.size() - 1);
-    String name = removed.path("name").asText();
+    String name = removed.path("name").asString();
     String parent = removed.hasNonNull("parent")
-            ? removed.get("parent").asText() : levels.get(levels.size() - 2).path("name").asText();
+            ? removed.get("parent").asString() : levels.get(levels.size() - 2).path("name").asString();
     if (!name.isBlank() && root.get("leaves") instanceof ArrayNode leaves) {
       for (JsonNode leaf : leaves) {
-        if (leaf instanceof ObjectNode object && name.equals(leaf.path("parent").asText())) {
+        if (leaf instanceof ObjectNode object && name.equals(leaf.path("parent").asString())) {
           object.put("parent", parent);
         }
       }
     }
     if (!name.isBlank() && root.get("plantLayers") instanceof ArrayNode layers) {
       for (JsonNode layer : layers) {
-        if (layer instanceof ObjectNode object && name.equals(layer.path("nearBranch").asText())) {
+        if (layer instanceof ObjectNode object && name.equals(layer.path("nearBranch").asString())) {
           object.put("nearBranch", parent);
         }
       }
@@ -626,7 +626,7 @@ public final class PresetDocument {
     }
     ArrayNode forces = existing instanceof ArrayNode array ? array : root.putArray("forces");
     List<String> names = new ArrayList<>();
-    forces.forEach(force -> names.add(force.path("name").asText()));
+    forces.forEach(force -> names.add(force.path("name").asString()));
     String name = kind;
     for (int number = 2; names.contains(name); number++) {
       name = kind + number;
@@ -698,7 +698,7 @@ public final class PresetDocument {
     if (!(root.get("forces") instanceof ArrayNode forces) || index < 0 || index >= forces.size()) {
       return;
     }
-    String name = forces.get(index).path("name").asText();
+    String name = forces.get(index).path("name").asString();
     forces.remove(index);
     if (forces.isEmpty()) {
       root.remove("forces");
@@ -727,7 +727,7 @@ public final class PresetDocument {
       return "This level no longer exists.";
     }
     String name = typed.trim();
-    String old = level.path("name").asText();
+    String old = level.path("name").asString();
     String problem = name.equals("any") ? "\"any\" is reserved for plant layers." : nameProblem(levels, index, name);
     if (problem != null || name.equals(old)) {
       return problem;
@@ -754,7 +754,7 @@ public final class PresetDocument {
       return "This force no longer exists.";
     }
     String name = typed.trim();
-    String old = force.path("name").asText();
+    String old = force.path("name").asString();
     String problem = nameProblem(forces, index, name);
     if (problem != null || name.equals(old)) {
       return problem;
@@ -796,14 +796,14 @@ public final class PresetDocument {
       if (field != null && field.fallback() instanceof String block && !block.startsWith("follows ")) {
         result.put(block, 1.0);
       }
-    } else if (node.isTextual()) {
-      result.put(node.textValue(), 1.0);
+    } else if (node.isString()) {
+      result.put(node.stringValue(), 1.0);
     } else if (node.has("rule")) {
       JsonNode blocks = node.get("blocks");
-      if (blocks != null && blocks.isTextual()) {
-        result.put(blocks.textValue(), 1.0);
+      if (blocks != null && blocks.isString()) {
+        result.put(blocks.stringValue(), 1.0);
       } else if (blocks != null) {
-        blocks.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue().asDouble()));
+        blocks.properties().iterator().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue().asDouble()));
       } else {
         BlockRule rule = ruleOf(path);
         if (rule != null) {
@@ -811,7 +811,7 @@ public final class PresetDocument {
         }
       }
     } else {
-      node.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue().asDouble()));
+      node.properties().iterator().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue().asDouble()));
     }
     return result;
   }
@@ -835,7 +835,7 @@ public final class PresetDocument {
   public String ruleKind(String path) {
     JsonNode node = value(path);
     if (node != null) {
-      return node.isTextual() ? "solid" : node.has("rule") ? node.get("rule").asText() : "noise";
+      return node.isString() ? "solid" : node.has("rule") ? node.get("rule").asString() : "noise";
     }
     return switch (ruleOf(path)) {
       case null -> "solid";
@@ -976,7 +976,7 @@ public final class PresetDocument {
     // Read the JSON first, so an edit builds on a value that is invalid only until the next one is typed.
     if (value(path) instanceof ObjectNode rule && rule.get("bands") instanceof ArrayNode items) {
       List<BlockRule.Band> bands = new ArrayList<>();
-      items.forEach(item -> bands.add(new BlockRule.Band(item.path("below").asDouble(1), item.path("block").asText())));
+      items.forEach(item -> bands.add(new BlockRule.Band(item.path("below").asDouble(1), item.path("block").asString())));
       return bands;
     }
     return ruleOf(path) instanceof BlockRule.Height height ? height.bands() : List.of();
@@ -1064,7 +1064,7 @@ public final class PresetDocument {
    */
   private ObjectNode editableLevelRule(String path) {
     JsonNode node = value(path);
-    if (node instanceof ObjectNode current && "level".equals(current.path("rule").asText())) {
+    if (node instanceof ObjectNode current && "level".equals(current.path("rule").asString())) {
       return current.deepCopy();
     }
     if (node != null || !(ruleOf(path) instanceof BlockRule.ByLevel inherited)) {
@@ -1088,7 +1088,7 @@ public final class PresetDocument {
     List<BlockRole> active = new ArrayList<>();
     for (BlockRole role : survival ? SURVIVAL_ROLES : List.of(BlockRole.values())) {
       JsonNode node = value(prefix + role.jsonKey());
-      boolean off = node != null && node.isTextual() && node.textValue().equals(WeightedBlocks.OFF);
+      boolean off = node != null && node.isString() && node.stringValue().equals(WeightedBlocks.OFF);
       boolean listed = role == BlockRole.LOG || (survival && role == BlockRole.LEAVES)
               || (survival || role == BlockRole.CUT_END ? node != null && !off : !off);
       if (listed) {
@@ -1222,7 +1222,7 @@ public final class PresetDocument {
   private void writeWeights(String path, LinkedHashMap<String, Double> list) {
     if (list.isEmpty()) {
       clear(path);
-    } else if (value(path) instanceof ObjectNode rule && "noise".equals(rule.path("rule").asText())) {
+    } else if (value(path) instanceof ObjectNode rule && "noise".equals(rule.path("rule").asString())) {
       putNoise(path, list, rule.path("clump").asInt(1));
     } else if (value(path) == null && ruleOf(path) instanceof BlockRule.Noise inherited && inherited.clump() > 1) {
       putNoise(path, list, inherited.clump());
@@ -1236,7 +1236,7 @@ public final class PresetDocument {
   }
 
   /**
-   * A Simple slider's value with nothing stored: 0 for an offset, 1 for a multiplier, or the preset's size variance.
+   * A Simple slider's value with nothing stored: 0 for an offset, 1 for a multiplier, or the preset's own size variance or crown start.
    *
    * @param key Simple slider name.
    */
@@ -1244,6 +1244,7 @@ public final class PresetDocument {
     return switch (key) {
       case "branchAngle", "droop", "windLean" -> 0;
       case "sizeVariety" -> preset.tree().sizeVariance();
+      case "crownStart" -> SimpleAdjuster.crownStart(preset);
       default -> 1;
     };
   }
@@ -1287,7 +1288,7 @@ public final class PresetDocument {
    */
   public void keepSimpleFrom(PresetDocument previous) {
     if (previous.value("simple") instanceof ObjectNode stored) {
-      stored.fieldNames().forEachRemaining(key -> setSimpleValue(key, stored.get(key).asDouble()));
+      stored.propertyNames().forEach(key -> setSimpleValue(key, stored.get(key).asDouble()));
     }
   }
 
@@ -1357,7 +1358,7 @@ public final class PresetDocument {
       return;
     }
     ObjectNode copy = source.deepCopy();
-    String base = copy.path("name").asText() + " copy";
+    String base = copy.path("name").asString() + " copy";
     String name = base;
     for (int number = 2; layerNames(layers).contains(name); number++) {
       name = base + " " + number;
@@ -1481,7 +1482,7 @@ public final class PresetDocument {
       JsonNode next = key instanceof Integer index ? node.get(index) : node.get((String) key);
       if (next == null || next.isNull()) {
         if (!(node instanceof ObjectNode parent) || !(key instanceof String name)) {
-          error = path + ": cannot set a value here because the preset has no object to hold it";
+          error = path + ": cannot set a value here because the tree design has no object to hold it";
           return;
         }
         next = JsonNodeFactory.instance.objectNode();
@@ -1525,7 +1526,7 @@ public final class PresetDocument {
    */
   public void setText(String path, String value) {
     fillForceType(path, value);
-    put(path, TextNode.valueOf(value));
+    put(path, StringNode.valueOf(value));
   }
 
   /**
@@ -1553,11 +1554,14 @@ public final class PresetDocument {
       clear(path);
       return;
     }
+    JsonNode parsed;
     try {
-      put(path, MAPPER.readTree(text));
-    } catch (JsonProcessingException e) {
+      parsed = MAPPER.readTree(text);
+    } catch (JacksonException e) {
       error = path + ": invalid JSON";
+      return;
     }
+    put(path, parsed);
   }
 
   /**
@@ -1642,7 +1646,7 @@ public final class PresetDocument {
     try {
       param.set("profile", MAPPER.readTree(text));
       put(path, param);
-    } catch (JsonProcessingException e) {
+    } catch (JacksonException e) {
       error = path + ".profile: invalid JSON";
     }
   }

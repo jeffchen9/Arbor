@@ -89,4 +89,21 @@ public final class BranchLevels {
       open.add(new int[]{x, y, z});
     }
   }
+  /**
+   * Wood blocks per branch level, by level index: every block that is not leaves or a plant, counted for the level
+   * {@link #of} gives it.
+   *
+   * @param grid     The placed shapes.
+   * @param skeleton The tree's branches.
+   */
+  public static Map<Integer, Integer> woodCounts(ShapeGrid grid, Skeleton skeleton) {
+    Map<Integer, Integer> counts = new TreeMap<>();
+    of(grid, skeleton).forEach((key, level) -> {
+      Shape shape = grid.get(ShapeGrid.keyX(key), ShapeGrid.keyY(key), ShapeGrid.keyZ(key));
+      if (shape != null && !(shape instanceof Shape.Leaves) && !(shape instanceof Shape.Plant)) {
+        counts.merge(level, 1, Integer::sum);
+      }
+    });
+    return counts;
+  }
 }

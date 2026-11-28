@@ -18,7 +18,7 @@
 
 package com.jeffch.arbor.viewer;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.jeffch.arbor.math.Vec3;
 import com.jeffch.arbor.preset.BlockRole;
@@ -56,22 +56,6 @@ final class SettingsPanel extends JPanel {
   private static final int LEAF_INDENT = 22;
   private static final int ICON_SIZE = 14;
   /**
-   * An L-shaped line down the left of an open variance pane, so its rows read as part of the setting above.
-   */
-  private static final javax.swing.border.Border BRACKET = new javax.swing.border.AbstractBorder() {
-    @Override
-    public Insets getBorderInsets(Component component) {
-      return new Insets(2, 16, 8, 0);
-    }
-
-    @Override
-    public void paintBorder(Component component, Graphics g, int x, int y, int width, int height) {
-      g.setColor(UiParts.ACCENT);
-      g.fillRect(x + 5, y, 2, height - 4);
-      g.fillRect(x + 5, y + height - 4, 9, 2);
-    }
-  };
-  /**
    * Each decorator's title and its key under {@code decorators}, in display order.
    */
   private static final Map<String, String> DECORATORS = new LinkedHashMap<>();
@@ -102,15 +86,18 @@ final class SettingsPanel extends JPanel {
   private final ExportControls exportControls;
   private final BlockRuleEditor ruleEditor;
   private final Consumer<String> startFrom;
-  private final Runnable newRandom;
   private final Consumer<Boolean> viewChosen;
-  private final JLabel status = new JLabel();
   private final JTextArea problem = wrappedText(ERROR_COLOR);
   private final JTextArea unknownBlocks = wrappedText(WARNING_COLOR);
   private final Body treeBody = new Body();
   private final Body voxelBody = new Body();
   private final JScrollPane treeScroll = new JScrollPane(treeBody);
   private final JScrollPane voxelScroll = new JScrollPane(voxelBody);
+  /**
+   * The pages, in their order as tabs or side by side.
+   */
+  static final List<String> PAGES = List.of("Tree", "Voxelizer", "Decorators", "Export");
+  private final JPanel pagesHolder = new JPanel(new BorderLayout());
   private final Body decoratorBody = new Body();
   private final JScrollPane decoratorScroll = new JScrollPane(decoratorBody);
   private final Set<String> expanded = new HashSet<>();
@@ -129,7 +116,6 @@ final class SettingsPanel extends JPanel {
    */
   SettingsPanel(PresetDocument document, Runnable regenerate, Runnable statusChanged) {
     this(document, regenerate, statusChanged, name -> {
-    }, () -> {
     }, false, view -> {
     });
   }
@@ -139,41 +125,108 @@ final class SettingsPanel extends JPanel {
    * @param regenerate    Asks for a new tree after an edit.
    * @param statusChanged Told whenever the saved state or validity may have changed.
    * @param startFrom     Asked to start over from a bundled preset.
-   * @param newRandom     Asked to show a new random tree.
    * @param startSimple   Whether the Tree tab opens in the Simple view.
    * @param viewChosen    Told when the user picks a view; true is Simple.
    */
   SettingsPanel(PresetDocument document, Runnable regenerate, Runnable statusChanged, Consumer<String> startFrom,
-                Runnable newRandom, boolean startSimple, Consumer<Boolean> viewChosen) {
+                boolean startSimple, Consumer<Boolean> viewChosen) {
     super(new BorderLayout());
     this.document = document;
     this.regenerate = regenerate;
     this.statusChanged = statusChanged;
     this.startFrom = startFrom;
-    this.newRandom = newRandom;
     this.viewChosen = viewChosen;
     simpleView = startSimple;
     exportControls = new ExportControls(document);
     ruleEditor = new BlockRuleEditor(document, (role, current, picked) -> blockPicker(role, false, current, picked),
             path -> weightsControl(document.field(path)), this::structuralLater, this::edited);
-    // Revert is in the File menu.
-    JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    buttons.add(status);
-    JPanel top = new JPanel(new BorderLayout());
-    top.add(buttons, BorderLayout.NORTH);
-    top.add(problem, BorderLayout.CENTER);
-    add(top, BorderLayout.NORTH);
-    JTabbedPane tabs = new JTabbedPane();
+    // Whether there are unsaved changes shows as * in the window title; Revert is in the File menu.
+    add(problem, BorderLayout.NORTH);
     for (JScrollPane scroll : List.of(treeScroll, voxelScroll, decoratorScroll)) {
       scroll.getVerticalScrollBar().setUnitIncrement(18);
       scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
     }
-    tabs.addTab("Tree", treeScroll);
-    tabs.addTab("Voxelizer", voxelScroll);
-    tabs.addTab("Decorators", decoratorScroll);
-    tabs.addTab("Export", exportControls);
-    add(tabs, BorderLayout.CENTER);
+    add(pagesHolder, BorderLayout.CENTER);
+    showPages(null);
     rebuild();
+  }
+
+  /**
+   * Lays out the pages: Tree, Voxelizer and Decorators as tabs, or any of the four side by side, each under its name,
+   * for a wide editor window when the 3D view has a window of its own.
+   *
+   * @param sideBySide The pages to show side by side, in their usual order whatever order these come in; null for the
+   *                   tabs.
+   */
+  void showPages(Set<String> sideBySide) {
+    List<JComponent> pages = List.of(treeScroll, voxelScroll, decoratorScroll, exportControls);
+    pagesHolder.removeAll();
+    // Side by side, the scroll panes' own boxes would double up with the lines between pages, and Export has none,
+    // so only the lines below drawn here frame the pages.
+    for (JScrollPane scroll : List.of(treeScroll, voxelScroll, decoratorScroll)) {
+      scroll.setBorder(sideBySide == null ? UIManager.getBorder("ScrollPane.border") : null);
+    }
+    Color line = UIManager.getColor("Component.borderColor");
+    if (sideBySide == null) {
+      JTabbedPane tabs = new JTabbedPane();
+      // When the pane is narrow, the tabs wrap onto a second row rather than hiding behind scroll arrows.
+      tabs.setTabLayoutPolicy(JTabbedPane.WRAP_TAB_LAYOUT);
+      // Export is a step of its own rather than more settings, so on one screen it takes the pane in their place:
+      // see showExport.
+      for (int i = 0; i < PAGES.size() - 1; i++) {
+        tabs.addTab(PAGES.get(i), pages.get(i));
+      }
+      pagesHolder.add(tabs, BorderLayout.CENTER);
+    } else {
+      // ponytail: equal widths; give each page its own divider if people want to size them.
+      JPanel row = new JPanel(new GridLayout(1, 0));
+      for (int i = 0; i < PAGES.size(); i++) {
+        if (sideBySide.contains(PAGES.get(i))) {
+          // A line on every page's left, the first one included, so the controls beside it are set off the same way.
+          row.add(titled(PAGES.get(i), pages.get(i), BorderFactory.createMatteBorder(0, 1, 0, 0, line)));
+        }
+      }
+      if (row.getComponentCount() == 0) {
+        JLabel hint = new JLabel("Turn on Tree, Voxelizer, Decorators or Export with the buttons on the right edge.");
+        hint.setForeground(UiParts.MUTED);
+        hint.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        hint.setVerticalAlignment(SwingConstants.TOP);
+        row.add(hint);
+      }
+      pagesHolder.add(row, BorderLayout.CENTER);
+    }
+    pagesHolder.revalidate();
+    pagesHolder.repaint();
+  }
+
+  /**
+   * On one screen, shows the Export page in place of the Tree, Voxelizer and Decorators tabs.
+   */
+  void showExport() {
+    pagesHolder.removeAll();
+    pagesHolder.add(titled("Export", exportControls, BorderFactory.createEmptyBorder()), BorderLayout.CENTER);
+    pagesHolder.revalidate();
+    pagesHolder.repaint();
+  }
+
+  /**
+   * A page under its name, with a rule below the name.
+   *
+   * @param name    Page name.
+   * @param page    Page contents.
+   * @param outline Line setting the page off from its neighbors.
+   */
+  private static JPanel titled(String name, JComponent page, javax.swing.border.Border outline) {
+    JLabel title = new JLabel(name);
+    title.setFont(title.getFont().deriveFont(Font.BOLD));
+    title.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Component.borderColor")),
+            BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+    JPanel titled = new JPanel(new BorderLayout());
+    titled.setBorder(outline);
+    titled.add(title, BorderLayout.NORTH);
+    titled.add(page, BorderLayout.CENTER);
+    return titled;
   }
 
   /**
@@ -397,11 +450,9 @@ final class SettingsPanel extends JPanel {
   }
 
   /**
-   * Updates save state and error text.
+   * Updates the error text.
    */
   void refresh() {
-    boolean hasFile = document.file() != null;
-    status.setText(document.dirty() ? "Unsaved changes" : hasFile ? "Saved" : "Not saved to a file yet");
     String text = document.error();
     if (text == null && document.changedOnDisk()) {
       text = "The file changed on disk. Revert to load it.";
@@ -469,7 +520,7 @@ final class SettingsPanel extends JPanel {
     }
     treeBody.add(viewSwitch());
     if (simpleView) {
-      treeBody.add(new SimpleTreePanel(document, this::edited, startFrom, newRandom));
+      treeBody.add(new SimpleTreePanel(document, this::edited, startFrom));
     } else {
       if (document.simpleActive()) {
         JButton reset = new JButton("Reset sliders");
@@ -666,7 +717,7 @@ final class SettingsPanel extends JPanel {
         header.setCursor(Cursor.getDefaultCursor());
         treeBody.showDropLine(-1);
         String path = "leaves[" + leaf + "].parent";
-        if (target != null && !target.name().equals(document.value(path).asText())) {
+        if (target != null && !target.name().equals(document.value(path).asString())) {
           String level = target.name();
           structuralLater(() -> document.setText(path, level));
         }
@@ -758,7 +809,7 @@ final class SettingsPanel extends JPanel {
         makeDraggable(fold.header(), leaf);
       }
       if (level >= 0 && parent == treeBody) {
-        levelRows.add(new LevelRow(document.value("levels[" + level + "].name").asText(), fold));
+        levelRows.add(new LevelRow(document.value("levels[" + level + "].name").asString(), fold));
       }
     }
     if (!sections.isEmpty()) {
@@ -802,7 +853,7 @@ final class SettingsPanel extends JPanel {
    */
   private void addRename(JPanel body, String path, Function<String, String> rename) {
     JsonNode node = document.value(path);
-    String current = node == null ? "" : node.asText();
+    String current = node == null ? "" : node.asString();
     JTextField text = new JTextField(current);
     text.setAlignmentX(LEFT_ALIGNMENT);
     JLabel refused = new JLabel();
@@ -954,6 +1005,12 @@ final class SettingsPanel extends JPanel {
     JLabel name = new JLabel(SettingNames.of(field.path()));
     JLabel key = new JLabel("(" + field.key() + ")");
     key.setForeground(KEY_COLOR);
+    String tip = SettingNames.tip(field.path());
+    if (tip != null) {
+      String html = "<html><p width=300>" + tip.replace("&", "&amp;").replace("<", "&lt;") + "</p></html>";
+      name.setToolTipText(html);
+      key.setToolTipText(html);
+    }
     JPanel labels = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
     labels.add(name);
     labels.add(key);
@@ -1061,7 +1118,7 @@ final class SettingsPanel extends JPanel {
    */
   private JComponent choiceControl(SettingField field) {
     JsonNode node = document.value(field.path());
-    String current = node != null ? node.asText() : String.valueOf(field.fallback());
+    String current = node != null ? node.asString() : String.valueOf(field.fallback());
     List<String> options = field.options();
     if (field.key().equals("nearBranch")) {
       options = new ArrayList<>(List.of("any"));
@@ -1086,11 +1143,11 @@ final class SettingsPanel extends JPanel {
    */
   private JComponent textControl(SettingField field) {
     JsonNode node = document.value(field.path());
-    String current = node != null ? node.asText() : String.valueOf(field.fallback());
+    String current = node != null ? node.asString() : String.valueOf(field.fallback());
     JTextField text = new JTextField(current);
     onCommit(text, typed -> {
       String trimmed = typed.trim();
-      String saved = document.value(field.path()) != null ? document.value(field.path()).asText() : current;
+      String saved = document.value(field.path()) != null ? document.value(field.path()).asString() : current;
       if (trimmed.isEmpty()) {
         text.setText(saved);
       } else if (!trimmed.equals(saved)) {
@@ -1196,8 +1253,10 @@ final class SettingsPanel extends JPanel {
     };
     JPanel shapes = row();
     for (ProfileShape shape : PROFILE_SHAPES) {
-      JButton button = small(new JButton(shape.name()));
-      button.setToolTipText(shape.tip());
+      JButton button = small(new JButton(new FlatSVGIcon(
+              "icons/profile-" + shape.name().toLowerCase(Locale.ROOT) + ".svg", ICON_SIZE, ICON_SIZE)));
+      button.setName(shape.name());
+      button.setToolTipText(shape.name() + ": " + shape.tip());
       button.addActionListener(event -> {
         picked[0] = shape;
         write.run();
@@ -1241,7 +1300,7 @@ final class SettingsPanel extends JPanel {
     JPanel body = new JPanel();
     body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
     body.setAlignmentX(LEFT_ALIGNMENT);
-    body.setBorder(BRACKET);
+    body.setBorder(UiParts.BRACKET);
     if (button.isSelected()) {
       fill.accept(body);
     }
@@ -1559,7 +1618,7 @@ final class SettingsPanel extends JPanel {
   /**
    * A ready-made profile.
    *
-   * @param name   Button text.
+   * @param name   Name in the tooltip; its icon is {@code icons/profile-<name>.svg}.
    * @param tip    What it does.
    * @param points Its curve for a strength from 0 to 1, or null to remove the profile.
    */

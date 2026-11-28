@@ -30,7 +30,7 @@ import java.nio.file.Path;
  * @param dataVersion Minecraft data version written into each file.
  */
 public record ExportOptions(Path preset, int count, Path folder, int dataVersion) {
-  public static final String USAGE = "arbor export <preset.json> --count <n> [--out <folder>] [--data-version <n>]";
+  public static final String USAGE = "arbor export <design.json> --count <n> [--out <folder>] [--data-version <n>]";
   private static final int MAX_COUNT = 1_000_000;
 
   /**
